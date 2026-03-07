@@ -12,6 +12,7 @@ from torch_utils import training_stats
 from torch_utils import misc
 from torch_utils.ops import conv2d_gradfix
 from losses.pcp import PerceptualLoss
+from losses.focal_frequency_loss import FocalFrequencyLoss
 
 #----------------------------------------------------------------------------
 
@@ -22,7 +23,7 @@ class Loss:
 #----------------------------------------------------------------------------
 
 class TwoStageLoss(Loss):
-    def __init__(self, device, G_mapping, G_synthesis, D, augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, truncation_psi=1, pcp_ratio=1.0):
+    def __init__(self, device, G_mapping, G_synthesis, D, augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, truncation_psi=1, pcp_ratio=1.0, ffl_ratio=0.0):
         super().__init__()
         self.device = device
         self.G_mapping = G_mapping
@@ -38,6 +39,8 @@ class TwoStageLoss(Loss):
         self.truncation_psi = truncation_psi
         self.pcp = PerceptualLoss(layer_weights=dict(conv4_4=1/4, conv5_4=1/2)).to(device)
         self.pcp_ratio = pcp_ratio
+        self.ffl_ratio = ffl_ratio
+        self.ffl = FocalFrequencyLoss(alpha=1.0).to(device) if ffl_ratio > 0 else None
 
     def run_G(self, img_in, mask_in, z, c, sync):
         with misc.ddp_sync(self.G_mapping, sync):
@@ -87,8 +90,10 @@ class TwoStageLoss(Loss):
                 training_stats.report('Loss/G/l1_loss', l1_loss)
                 pcp_loss, _ = self.pcp(gen_img, real_img)
                 training_stats.report('Loss/G/pcp_loss', pcp_loss)
+                ffl_loss = self.ffl(gen_img, real_img) if self.ffl is not None else torch.tensor(0.0, device=self.device)
+                training_stats.report('Loss/G/ffl_loss', ffl_loss)
             with torch.autograd.profiler.record_function('Gmain_backward'):
-                loss_Gmain_all = loss_Gmain + loss_Gmain_stg1 + pcp_loss * self.pcp_ratio
+                loss_Gmain_all = loss_Gmain + loss_Gmain_stg1 + pcp_loss * self.pcp_ratio + ffl_loss * self.ffl_ratio
                 loss_Gmain_all.mean().mul(gain).backward()
 
         # # Gpl: Apply path length regularization.
