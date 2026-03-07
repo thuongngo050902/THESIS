@@ -55,6 +55,7 @@ def setup_training_loop_kwargs(
     loss = None,
     gamma      = None, # Override R1 gamma: <float>
     pr         = None,
+    ffl_ratio  = None, # Focal Frequency Loss weight: <float>, default = 0 (disabled)
     pl         = None, # Train with path length regularization: <bool>, default = True
     kimg       = None, # Override training duration: <int>
     batch      = None, # Override batch size: <int>
@@ -268,6 +269,13 @@ def setup_training_loop_kwargs(
         assert isinstance(pr, float)
         desc += f'-pr{pr:g}'
         args.loss_kwargs.pcp_ratio = pr
+
+    if ffl_ratio is not None:
+        assert isinstance(ffl_ratio, float)
+        if not ffl_ratio >= 0:
+            raise UserError('--ffl-ratio must be non-negative')
+        desc += f'-ffl{ffl_ratio:g}'
+        args.loss_kwargs.ffl_ratio = ffl_ratio
 
     if pl is None:
         pl = True
@@ -511,6 +519,7 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--loss', help='the path of loss', type=str, metavar='STRING')
 @click.option('--gamma', help='Override R1 gamma', type=float)
 @click.option('--pr', help='Override ratio of pcp loss', type=float)
+@click.option('--ffl-ratio', help='Focal Frequency Loss weight [default: 0 = disabled]', type=float)
 @click.option('--pl', help='Enable path length regularization [default: true]', type=bool, metavar='BOOL')
 @click.option('--kimg', help='Override training duration', type=int, metavar='INT')
 @click.option('--batch', help='Override batch size', type=int, metavar='INT')
