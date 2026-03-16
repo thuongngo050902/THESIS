@@ -18,6 +18,7 @@ import torch
 import dnnlib
 
 from training import training_loop
+from training.schedule_utils import compute_total_kimg_from_epochs, resolve_training_schedule
 # from training import training_loop_simmim as training_loop
 # from training import training_loop_woMap as training_loop
 from metrics import metric_main
@@ -55,18 +56,20 @@ def setup_training_loop_kwargs(
     loss = None,
     gamma      = None, # Override R1 gamma: <float>
     pr         = None,
-    ffl_ratio  = None, # Focal Frequency Loss weight: <float>, default = 0 (disabled)
-    pl         = None, # Train with path length regularization: <bool>, default = True
+    ffl_ratio  = None, # Focal Frequency Loss weight: <float>, default = schedule-controlled
+    pl         = None, # Train with path length regularization: <bool>, default = False
     kimg       = None, # Override training duration: <int>
+    epochs     = None, # Override training duration in epochs: <int>
     batch      = None, # Override batch size: <int>
     truncation = None, # truncation for training: <float>
     style_mix  = None, # style mixing probability for training: <float>
     ema        = None, # Half-life of the exponential moving average (EMA) of generator weights: <int>
     lr         = None, # learning rate
     lrt        = None, # learning rate of transformer: <float>
+    ffl_warmup_kimg = None, # Linearly warm the FFT loss ratio over this many kimg.
 
     # Discriminator augmentation.
-    aug        = None, # Augmentation mode: 'ada' (default), 'noaug', 'fixed'
+    aug        = None, # Augmentation mode: schedule default = 'noaug', otherwise 'ada'/'fixed'
     p          = None, # Specify p for 'fixed' (required): <float>
     target     = None, # Override ADA target for 'ada': <float>, default = depends on aug
     augpipe    = None, # Augmentation pipeline: 'blit', 'geom', 'color', 'filter', 'noise', 'cutout', 'bg', 'bgc' (default), ..., 'bgcfnc'
@@ -226,6 +229,46 @@ def setup_training_loop_kwargs(
     # args.D_kwargs.epilogue_kwargs.mbstd_group_size = spec.mbstd
     args.D_kwargs.mbstd_group_size = spec.mbstd
 
+    args.total_kimg = spec.kimg
+    args.batch_size = spec.mb
+    args.batch_gpu = spec.mb // spec.ref_gpus
+    args.ema_kimg = spec.ema
+    args.ema_rampup = spec.ramp
+    args.G_reg_interval = 4
+
+    if epochs is not None:
+        assert isinstance(epochs, int)
+        if epochs < 1:
+            raise UserError('--epochs must be at least 1')
+        if kimg is not None:
+            raise UserError('Specify either --epochs or --kimg, not both')
+        args.total_kimg = compute_total_kimg_from_epochs(args.training_set_kwargs.max_size, epochs)
+        desc += f'-ep{epochs:d}'
+
+    if kimg is not None:
+        assert isinstance(kimg, int)
+        if not kimg >= 1:
+            raise UserError('--kimg must be at least 1')
+        desc += f'-kimg{kimg:d}'
+        args.total_kimg = kimg
+
+    schedule = resolve_training_schedule(
+        total_epochs=epochs,
+        total_kimg=args.total_kimg,
+        num_images=args.training_set_kwargs.max_size,
+    )
+    args.total_epochs = float(epochs) if epochs is not None else (args.total_kimg * 1000.0) / args.training_set_kwargs.max_size
+    desc += f'-sched{schedule["profile"]}'
+
+    if lr is None:
+        lr = schedule['lr']
+    if ffl_ratio is None:
+        ffl_ratio = schedule['ffl_ratio']
+    if ffl_warmup_kimg is None and schedule['enable_ffl_warmup']:
+        ffl_warmup_kimg = schedule['ffl_warmup_kimg']
+    if aug is None:
+        aug = schedule['aug']
+
     if lr is not None:
         assert isinstance(lr, float)
         spec.lrate = lr
@@ -246,12 +289,6 @@ def setup_training_loop_kwargs(
     else:
         desc += '-' + loss.split('.')[-1]
     args.loss_kwargs = dnnlib.EasyDict(class_name=loss, r1_gamma=spec.gamma)
-
-    args.total_kimg = spec.kimg
-    args.batch_size = spec.mb
-    args.batch_gpu = spec.mb // spec.ref_gpus
-    args.ema_kimg = spec.ema
-    args.ema_rampup = spec.ramp
 
     if cfg == 'cifar':
         args.loss_kwargs.pl_weight = 0 # disable path length regularization
@@ -276,20 +313,24 @@ def setup_training_loop_kwargs(
             raise UserError('--ffl-ratio must be non-negative')
         desc += f'-ffl{ffl_ratio:g}'
         args.loss_kwargs.ffl_ratio = ffl_ratio
+    if ffl_warmup_kimg is not None:
+        assert isinstance(ffl_warmup_kimg, float)
+        if ffl_warmup_kimg < 0:
+            raise UserError('--ffl-warmup-kimg must be non-negative')
+        desc += f'-fflwarm{ffl_warmup_kimg:g}'
+        args.loss_kwargs.enable_ffl_warmup = ffl_warmup_kimg > 0
+        args.loss_kwargs.ffl_warmup_kimg = ffl_warmup_kimg
+    else:
+        args.loss_kwargs.enable_ffl_warmup = False
+        args.loss_kwargs.ffl_warmup_kimg = 0.0
 
     if pl is None:
-        pl = True
+        pl = False
     assert isinstance(pl, bool)
     if pl is False:
         desc += f'-nopl'
         args.loss_kwargs.pl_weight = 0 # disable path length regularization
-
-    if kimg is not None:
-        assert isinstance(kimg, int)
-        if not kimg >= 1:
-            raise UserError('--kimg must be at least 1')
-        desc += f'-kimg{kimg:d}'
-        args.total_kimg = kimg
+        args.G_reg_interval = None
 
     if batch is not None:
         assert isinstance(batch, int)
@@ -318,11 +359,8 @@ def setup_training_loop_kwargs(
     # Discriminator augmentation: aug, p, target, augpipe
     # ---------------------------------------------------
 
-    if aug is None:
-        aug = 'ada'
-    else:
-        assert isinstance(aug, str)
-        desc += f'-{aug}'
+    assert isinstance(aug, str)
+    desc += f'-{aug}'
 
     if aug == 'ada':
         args.ada_target = 0.6
@@ -520,8 +558,10 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--gamma', help='Override R1 gamma', type=float)
 @click.option('--pr', help='Override ratio of pcp loss', type=float)
 @click.option('--ffl-ratio', help='Focal Frequency Loss weight [default: 0 = disabled]', type=float)
-@click.option('--pl', help='Enable path length regularization [default: true]', type=bool, metavar='BOOL')
+@click.option('--ffl-warmup-kimg', help='Warm up the FFL ratio linearly over this many kimg', type=float)
+@click.option('--pl', help='Enable path length regularization [default: false]', type=bool, metavar='BOOL')
 @click.option('--kimg', help='Override training duration', type=int, metavar='INT')
+@click.option('--epochs', help='Training duration in epochs; converted to kimg from dataset size', type=int, metavar='INT')
 @click.option('--batch', help='Override batch size', type=int, metavar='INT')
 @click.option('--truncation', help='truncation for training', type=float)
 @click.option('--style_mix', help='style mixing probability for training', type=float)
@@ -530,7 +570,7 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--lrt', help='learning rate', type=float)
 
 # Discriminator augmentation.
-@click.option('--aug', help='Augmentation mode [default: ada]', type=click.Choice(['noaug', 'ada', 'fixed']))
+@click.option('--aug', help='Augmentation mode [default: auto schedule uses noaug]', type=click.Choice(['noaug', 'ada', 'fixed']))
 @click.option('--p', help='Augmentation probability for --aug=fixed', type=float)
 @click.option('--target', help='ADA target value for --aug=ada', type=float)
 @click.option('--augpipe', help='Augmentation pipeline [default: bgc]', type=click.Choice(['blit', 'geom', 'color', 'filter', 'noise', 'cutout', 'bg', 'bgc', 'bgcf', 'bgcfn', 'bgcfnc']))
@@ -617,6 +657,7 @@ def main(ctx, outdir, dry_run, **config_kwargs):
     print(f'Output directory:   {args.run_dir}')
     print(f'Training data:      {args.training_set_kwargs.path}')
     print(f'Training duration:  {args.total_kimg} kimg')
+    print(f'Approx. epochs:     {args.total_epochs:.2f}')
     print(f'Number of GPUs:     {args.num_gpus}')
     print(f'Number of images:   {args.training_set_kwargs.max_size}')
     print(f'Image resolution:   {args.training_set_kwargs.resolution}')

@@ -13,6 +13,7 @@ from torch_utils import misc
 from torch_utils.ops import conv2d_gradfix
 from losses.pcp import PerceptualLoss
 from losses.focal_frequency_loss import FocalFrequencyLoss
+from training.schedule_utils import compute_warmup_ratio
 
 #----------------------------------------------------------------------------
 
@@ -23,7 +24,7 @@ class Loss:
 #----------------------------------------------------------------------------
 
 class TwoStageLoss(Loss):
-    def __init__(self, device, G_mapping, G_synthesis, D, augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, truncation_psi=1, pcp_ratio=1.0, ffl_ratio=0.0):
+    def __init__(self, device, G_mapping, G_synthesis, D, augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, truncation_psi=1, pcp_ratio=1.0, ffl_ratio=0.0, enable_ffl_warmup=False, ffl_warmup_kimg=0.0):
         super().__init__()
         self.device = device
         self.G_mapping = G_mapping
@@ -39,8 +40,24 @@ class TwoStageLoss(Loss):
         self.truncation_psi = truncation_psi
         self.pcp = PerceptualLoss(layer_weights=dict(conv4_4=1/4, conv5_4=1/2)).to(device)
         self.pcp_ratio = pcp_ratio
-        self.ffl_ratio = ffl_ratio
+        self.ffl_target_ratio = ffl_ratio
+        self.enable_ffl_warmup = enable_ffl_warmup
+        self.ffl_warmup_kimg = ffl_warmup_kimg
+        self.current_kimg = 0.0
+        self.total_kimg = 0.0
         self.ffl = FocalFrequencyLoss(alpha=1.0).to(device) if ffl_ratio > 0 else None
+
+    def set_progress(self, current_kimg, total_kimg=None):
+        self.current_kimg = float(current_kimg)
+        if total_kimg is not None:
+            self.total_kimg = float(total_kimg)
+
+    def get_effective_ffl_ratio(self):
+        if self.ffl is None:
+            return 0.0
+        if not self.enable_ffl_warmup:
+            return self.ffl_target_ratio
+        return self.ffl_target_ratio * compute_warmup_ratio(self.current_kimg, self.ffl_warmup_kimg)
 
     def run_G(self, img_in, mask_in, z, c, sync):
         with misc.ddp_sync(self.G_mapping, sync):
@@ -75,6 +92,7 @@ class TwoStageLoss(Loss):
         # Gmain: Maximize logits for generated images.
         if do_Gmain:
             with torch.autograd.profiler.record_function('Gmain_forward'):
+                effective_ffl_ratio = self.get_effective_ffl_ratio()
                 gen_img, _gen_ws, gen_img_stg1 = self.run_G(real_img, mask, gen_z, gen_c, sync=(sync and not do_Gpl)) # May get synced by Gpl.
                 gen_logits, gen_logits_stg1 = self.run_D(gen_img, mask, gen_img_stg1, gen_c, sync=False)
                 training_stats.report('Loss/scores/fake', gen_logits)
@@ -91,9 +109,13 @@ class TwoStageLoss(Loss):
                 pcp_loss, _ = self.pcp(gen_img, real_img)
                 training_stats.report('Loss/G/pcp_loss', pcp_loss)
                 ffl_loss = self.ffl(gen_img, real_img) if self.ffl is not None else torch.tensor(0.0, device=self.device)
-                training_stats.report('Loss/G/ffl_loss', ffl_loss)
+                weighted_ffl_loss = ffl_loss * effective_ffl_ratio
+                training_stats.report('Loss/G/ffl_loss_raw', ffl_loss)
+                training_stats.report('Loss/G/ffl_ratio_effective', torch.as_tensor(effective_ffl_ratio, device=self.device))
+                training_stats.report('Loss/G/ffl_loss', weighted_ffl_loss)
+                training_stats.report('Loss/G/ffl_loss_weighted', weighted_ffl_loss)
             with torch.autograd.profiler.record_function('Gmain_backward'):
-                loss_Gmain_all = loss_Gmain + loss_Gmain_stg1 + pcp_loss * self.pcp_ratio + ffl_loss * self.ffl_ratio
+                loss_Gmain_all = loss_Gmain + loss_Gmain_stg1 + pcp_loss * self.pcp_ratio + weighted_ffl_loss
                 loss_Gmain_all.mean().mul(gain).backward()
 
         # # Gpl: Apply path length regularization.
