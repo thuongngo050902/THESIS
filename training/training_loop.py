@@ -26,6 +26,24 @@ from metrics import metric_main
 
 #----------------------------------------------------------------------------
 
+def _normalize_dataset_sample(sample):
+    # MAT training expects every dataset sample to be (image, mask, label).
+    if not isinstance(sample, (tuple, list)) or len(sample) != 3:
+        raise ValueError('Expected dataset sample format (image, mask, label)')
+    image, mask, label = sample
+    return image, mask, label
+
+#----------------------------------------------------------------------------
+
+def _normalize_training_batch(batch):
+    # Default PyTorch collation may return either a tuple or list of tensors.
+    if not isinstance(batch, (tuple, list)) or len(batch) != 3:
+        raise ValueError('Expected training batch format (image, mask, label)')
+    images, masks, labels = batch
+    return images, masks, labels
+
+#----------------------------------------------------------------------------
+
 def setup_snapshot_image_grid(training_set, random_seed=0):
     rnd = np.random.RandomState(random_seed)
     gw = np.clip(7680 // training_set.image_shape[2], 7, 32)
@@ -60,7 +78,7 @@ def setup_snapshot_image_grid(training_set, random_seed=0):
             label_groups[label] = [indices[(i + gw) % len(indices)] for i in range(len(indices))]
 
     # Load data.
-    images, masks, labels = zip(*[training_set[i] for i in grid_indices])
+    images, masks, labels = zip(*[_normalize_dataset_sample(training_set[i]) for i in grid_indices])
     return (gw, gh), np.stack(images), np.stack(masks), np.stack(labels)
 
 #----------------------------------------------------------------------------
@@ -304,7 +322,7 @@ def training_loop(
 
         # Fetch training data.
         with torch.autograd.profiler.record_function('data_fetch'):
-            phase_real_img, phase_mask, phase_real_c = next(training_set_iterator)
+            phase_real_img, phase_mask, phase_real_c = _normalize_training_batch(next(training_set_iterator))
             phase_real_img = (phase_real_img.to(device).to(torch.float32) / 127.5 - 1).split(batch_gpu)
             # adaptation to inpainting config
             phase_mask = phase_mask.to(device).to(torch.float32).split(batch_gpu)
