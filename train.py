@@ -279,10 +279,10 @@ def setup_training_loop_kwargs(
         desc += f'-lrt{lrt:g}'
 
     if lrt is None:
-        args.G_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, betas=[0, 0.99], eps=1e-8)
+        args.G_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, betas=[0.0, 0.99], eps=1e-8)
     else:
-        args.G_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, lrt=spec.lrt, betas=[0, 0.99], eps=1e-8)
-    args.D_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, betas=[0, 0.99], eps=1e-8)
+        args.G_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, lrt=spec.lrt, betas=[0.0, 0.99], eps=1e-8)
+    args.D_opt_kwargs = dnnlib.EasyDict(class_name='torch.optim.Adam', lr=spec.lrate, betas=[0.0, 0.99], eps=1e-8)
 
     if loss is None:
         loss = 'losses.loss.TwoStageLoss'
