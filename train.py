@@ -56,7 +56,8 @@ def setup_training_loop_kwargs(
     loss = None,
     gamma      = None, # Override R1 gamma: <float>
     pr         = None,
-    ffl_ratio  = None, # Focal Frequency Loss weight: <float>, default = schedule-controlled
+    lambda_ffl = None, # Preferred Focal Frequency Loss weight: <float>, default = schedule-controlled
+    ffl_ratio  = None, # Legacy alias for Focal Frequency Loss weight: <float>, default = schedule-controlled
     pl         = None, # Train with path length regularization: <bool>, default = False
     kimg       = None, # Override training duration: <int>
     epochs     = None, # Override training duration in epochs: <int>
@@ -67,6 +68,9 @@ def setup_training_loop_kwargs(
     lr         = None, # learning rate
     lrt        = None, # learning rate of transformer: <float>
     ffl_warmup_kimg = None, # Linearly warm the FFT loss ratio over this many kimg.
+    enable_rel_pos_bias = False, # Enable relative position bias in WindowAttention: <bool>
+    enable_mask_bias = False, # Enable mask-aware additive attention bias: <bool>
+    enable_deterministic_latent_gate = False, # Enable deterministic latent gating: <bool>
 
     # Discriminator augmentation.
     aug        = None, # Augmentation mode: schedule default = 'noaug', otherwise 'ada'/'fixed'
@@ -86,6 +90,16 @@ def setup_training_loop_kwargs(
     workers    = None, # Override number of DataLoader workers: <int>, default = 3
 ):
     args = dnnlib.EasyDict()
+
+    if enable_rel_pos_bias is None:
+        enable_rel_pos_bias = False
+    if enable_mask_bias is None:
+        enable_mask_bias = False
+    if enable_deterministic_latent_gate is None:
+        enable_deterministic_latent_gate = False
+    assert isinstance(enable_rel_pos_bias, bool)
+    assert isinstance(enable_mask_bias, bool)
+    assert isinstance(enable_deterministic_latent_gate, bool)
 
     # ------------------------------------------
     # General options: gpus, snap, metrics, seed
@@ -223,6 +237,9 @@ def setup_training_loop_kwargs(
     args.D_kwargs = dnnlib.EasyDict(class_name=discriminator)
     args.G_kwargs.synthesis_kwargs.channel_base = args.D_kwargs.channel_base = int(spec.fmaps * 32768)
     args.G_kwargs.synthesis_kwargs.channel_max = args.D_kwargs.channel_max = 512
+    args.G_kwargs.synthesis_kwargs.enable_rel_pos_bias = enable_rel_pos_bias
+    args.G_kwargs.synthesis_kwargs.enable_mask_bias = enable_mask_bias
+    args.G_kwargs.synthesis_kwargs.enable_deterministic_latent_gate = enable_deterministic_latent_gate
     args.G_kwargs.mapping_kwargs.num_layers = spec.map
     # args.G_kwargs.synthesis_kwargs.num_fp16_res = args.D_kwargs.num_fp16_res = 4 # enable mixed-precision training
     # args.G_kwargs.synthesis_kwargs.conv_clamp = args.D_kwargs.conv_clamp = 256 # clamp activations to avoid float16 overflow
@@ -262,8 +279,20 @@ def setup_training_loop_kwargs(
 
     if lr is None:
         lr = schedule['lr']
-    if ffl_ratio is None:
-        ffl_ratio = schedule['ffl_ratio']
+    if lambda_ffl is not None:
+        assert isinstance(lambda_ffl, float)
+        if lambda_ffl < 0:
+            raise UserError('--lambda-ffl must be non-negative')
+    if ffl_ratio is not None:
+        assert isinstance(ffl_ratio, float)
+        if ffl_ratio < 0:
+            raise UserError('--ffl-ratio must be non-negative')
+    if lambda_ffl is not None and ffl_ratio is not None and lambda_ffl != ffl_ratio:
+        raise UserError('Specify only one of --lambda-ffl or --ffl-ratio, or give both the same value')
+
+    effective_ffl_ratio = lambda_ffl if lambda_ffl is not None else ffl_ratio
+    if effective_ffl_ratio is None:
+        effective_ffl_ratio = schedule['ffl_ratio']
     if ffl_warmup_kimg is None and schedule['enable_ffl_warmup']:
         ffl_warmup_kimg = schedule['ffl_warmup_kimg']
     if aug is None:
@@ -307,12 +336,9 @@ def setup_training_loop_kwargs(
         desc += f'-pr{pr:g}'
         args.loss_kwargs.pcp_ratio = pr
 
-    if ffl_ratio is not None:
-        assert isinstance(ffl_ratio, float)
-        if not ffl_ratio >= 0:
-            raise UserError('--ffl-ratio must be non-negative')
-        desc += f'-ffl{ffl_ratio:g}'
-        args.loss_kwargs.ffl_ratio = ffl_ratio
+    if effective_ffl_ratio is not None:
+        desc += f'-ffl{effective_ffl_ratio:g}'
+        args.loss_kwargs.ffl_ratio = effective_ffl_ratio
     if ffl_warmup_kimg is not None:
         assert isinstance(ffl_warmup_kimg, float)
         if ffl_warmup_kimg < 0:
@@ -557,6 +583,7 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--loss', help='the path of loss', type=str, metavar='STRING')
 @click.option('--gamma', help='Override R1 gamma', type=float)
 @click.option('--pr', help='Override ratio of pcp loss', type=float)
+@click.option('--lambda-ffl', 'lambda_ffl', help='Weight for the extra Focal Frequency Loss term', type=float)
 @click.option('--ffl-ratio', help='Focal Frequency Loss weight [default: 0 = disabled]', type=float)
 @click.option('--ffl-warmup-kimg', help='Warm up the FFL ratio linearly over this many kimg', type=float)
 @click.option('--pl', help='Enable path length regularization [default: false]', type=bool, metavar='BOOL')
@@ -568,6 +595,9 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--ema', help='Half-life of the exponential moving average (EMA) of generator weights', type=int, metavar='INT')
 @click.option('--lr', help='learning rate', type=float)
 @click.option('--lrt', help='learning rate', type=float)
+@click.option('--enable-rel-pos-bias', help='Enable relative position bias inside WindowAttention', type=bool, metavar='BOOL')
+@click.option('--enable-mask-bias', help='Enable mask-aware additive attention bias', type=bool, metavar='BOOL')
+@click.option('--enable-deterministic-latent-gate', help='Enable deterministic latent gating at MAT blend points', type=bool, metavar='BOOL')
 
 # Discriminator augmentation.
 @click.option('--aug', help='Augmentation mode [default: auto schedule uses noaug]', type=click.Choice(['noaug', 'ada', 'fixed']))
