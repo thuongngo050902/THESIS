@@ -19,7 +19,6 @@ import dnnlib
 import numpy as np
 import PIL.Image
 import torch
-import torch.nn.functional as F
 
 try:
     import pyspng
@@ -28,7 +27,6 @@ except ImportError:
 
 import legacy
 from datasets.mask_generator_512 import RandomMask
-from networks.mat import Generator
 
 
 def num_range(s: str) -> List[int]:
@@ -42,14 +40,49 @@ def num_range(s: str) -> List[int]:
     return [int(x) for x in vals]
 
 
+def format_key_list(keys, limit=20):
+    if len(keys) <= limit:
+        return keys
+    return keys[:limit] + [f"... ({len(keys) - limit} more)"]
+
+
+def diff_named_params_and_buffers(src_module, dst_module):
+    src_keys = {name for name, _tensor in named_params_and_buffers(src_module)}
+    dst_keys = {name for name, _tensor in named_params_and_buffers(dst_module)}
+    missing_in_source = sorted(dst_keys - src_keys)
+    unexpected_in_source = sorted(src_keys - dst_keys)
+    return missing_in_source, unexpected_in_source
+
+
 def copy_params_and_buffers(src_module, dst_module, require_all=False):
     assert isinstance(src_module, torch.nn.Module)
     assert isinstance(dst_module, torch.nn.Module)
+
+    missing_in_source, unexpected_in_source = diff_named_params_and_buffers(src_module, dst_module)
     src_tensors = {name: tensor for name, tensor in named_params_and_buffers(src_module)}
+    shape_mismatches = []
     for name, tensor in named_params_and_buffers(dst_module):
-        assert (name in src_tensors) or (not require_all)
+        if name not in src_tensors:
+            continue
+        if tuple(src_tensors[name].shape) != tuple(tensor.shape):
+            shape_mismatches.append(
+                f"{name}: src{tuple(src_tensors[name].shape)} != dst{tuple(tensor.shape)}"
+            )
+            continue
         if name in src_tensors:
             tensor.copy_(src_tensors[name].detach()).requires_grad_(tensor.requires_grad)
+
+    if missing_in_source or unexpected_in_source or shape_mismatches:
+        print("[copy_params_and_buffers] Module mismatch detected.")
+        if missing_in_source:
+            print("  Missing in source:", format_key_list(missing_in_source))
+        if unexpected_in_source:
+            print("  Unexpected in source:", format_key_list(unexpected_in_source))
+        if shape_mismatches:
+            print("  Shape mismatches:", format_key_list(shape_mismatches))
+
+    if require_all and (missing_in_source or unexpected_in_source or shape_mismatches):
+        raise AssertionError("Source and destination modules do not have identical parameter/buffer names.")
 
 
 def params_and_buffers(module):
@@ -60,6 +93,31 @@ def params_and_buffers(module):
 def named_params_and_buffers(module):
     assert isinstance(module, torch.nn.Module)
     return list(module.named_parameters()) + list(module.named_buffers())
+
+
+def select_generator_for_inference(network_data):
+    available = [
+        key for key in ["G", "D", "G_ema"]
+        if isinstance(network_data.get(key), torch.nn.Module)
+    ]
+    print("Checkpoint modules:", ", ".join(available) if available else "none")
+
+    if isinstance(network_data.get("G_ema"), torch.nn.Module):
+        return network_data["G_ema"], "G_ema"
+    if isinstance(network_data.get("G"), torch.nn.Module):
+        print("Checkpoint is missing G_ema; falling back to G for inference.")
+        return network_data["G"], "G"
+    raise KeyError("Checkpoint does not contain a usable generator under G_ema or G.")
+
+
+def load_generator_for_inference(network_pkl, device):
+    with dnnlib.util.open_url(network_pkl) as f:
+        network_data = legacy.load_network_pkl(f)
+
+    generator, generator_key = select_generator_for_inference(network_data)
+    generator = generator.to(device).eval().requires_grad_(False)
+    print(f"Using checkpoint generator: {generator_key}")
+    return generator, generator_key, network_data
 
 
 @click.command()
@@ -100,11 +158,7 @@ def generate_images(
 
     print(f'Loading networks from: {network_pkl}')
     device = torch.device('cuda')
-    with dnnlib.util.open_url(network_pkl) as f:
-        G_saved = legacy.load_network_pkl(f)['G_ema'].to(device).eval().requires_grad_(False) # type: ignore
-    net_res = 512 if resolution > 512 else resolution
-    G = Generator(z_dim=512, c_dim=0, w_dim=512, img_resolution=net_res, img_channels=3).to(device).eval().requires_grad_(False)
-    copy_params_and_buffers(G_saved, G, require_all=True)
+    G, _generator_key, _network_data = load_generator_for_inference(network_pkl, device)
 
     os.makedirs(outdir, exist_ok=True)
 
