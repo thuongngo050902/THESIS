@@ -112,8 +112,11 @@ class InfiniteSampler(torch.utils.data.Sampler):
         assert num_replicas > 0
         assert 0 <= rank < num_replicas
         assert 0 <= window_size <= 1
-        # Some torch versions require `data_source` in Sampler.__init__.
-        super().__init__(dataset)
+        # Prefer the modern signature, but keep compatibility with older torch releases.
+        try:
+            super().__init__()
+        except TypeError:
+            super().__init__(data_source=dataset)
         self.dataset = dataset
         self.rank = rank
         self.num_replicas = num_replicas
