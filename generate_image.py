@@ -46,10 +46,15 @@ def copy_params_and_buffers(src_module, dst_module, require_all=False):
     assert isinstance(src_module, torch.nn.Module)
     assert isinstance(dst_module, torch.nn.Module)
     src_tensors = {name: tensor for name, tensor in named_params_and_buffers(src_module)}
+    missing = []
     for name, tensor in named_params_and_buffers(dst_module):
-        assert (name in src_tensors) or (not require_all)
+        if (name not in src_tensors) and require_all:
+            missing.append(name)
+            continue
         if name in src_tensors:
             tensor.copy_(src_tensors[name].detach()).requires_grad_(tensor.requires_grad)
+    if require_all and missing:
+        raise AssertionError(f'Missing {len(missing)} params/buffers in source checkpoint. Example: {missing[:5]}')
 
 
 def params_and_buffers(module):
@@ -70,6 +75,7 @@ def named_params_and_buffers(module):
 @click.option('--resolution', type=int, help='resolution of input image', default=512, show_default=True)
 @click.option('--trunc', 'truncation_psi', type=float, help='Truncation psi', default=1, show_default=True)
 @click.option('--noise-mode', help='Noise mode', type=click.Choice(['const', 'random', 'none']), default='const', show_default=True)
+@click.option('--allow-missing-params', is_flag=True, default=False, help='Allow loading checkpoints that miss some current model params/buffers.')
 @click.option('--outdir', help='Where to save the output images', type=str, required=True, metavar='DIR')
 def generate_images(
     ctx: click.Context,
@@ -79,6 +85,7 @@ def generate_images(
     resolution: int,
     truncation_psi: float,
     noise_mode: str,
+    allow_missing_params: bool,
     outdir: str,
 ):
     """
@@ -104,7 +111,7 @@ def generate_images(
         G_saved = legacy.load_network_pkl(f)['G_ema'].to(device).eval().requires_grad_(False) # type: ignore
     net_res = 512 if resolution > 512 else resolution
     G = Generator(z_dim=512, c_dim=0, w_dim=512, img_resolution=net_res, img_channels=3).to(device).eval().requires_grad_(False)
-    copy_params_and_buffers(G_saved, G, require_all=True)
+    copy_params_and_buffers(G_saved, G, require_all=not allow_missing_params)
 
     os.makedirs(outdir, exist_ok=True)
 

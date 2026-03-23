@@ -68,6 +68,9 @@ class _LegacyUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
         if module == 'dnnlib.tflib.network' and name == 'Network':
             return _TFNetworkStub
+        # Some checkpoints were serialized with NumPy 2.x internals.
+        if module.startswith('numpy._core'):
+            module = module.replace('numpy._core', 'numpy.core', 1)
         return super().find_class(module, name)
 
 #----------------------------------------------------------------------------

@@ -226,36 +226,44 @@ def training_loop(
     if hasattr(loss, 'set_progress'):
         loss.set_progress(current_kimg=0.0, total_kimg=total_kimg)
     phases = []
+
+    def _build_optimizer(module, opt_kwargs, mb_ratio=1.0):
+        # Support separate lr for transformer params via custom `lrt` option.
+        opt_kwargs = dnnlib.EasyDict(opt_kwargs)
+        opt_kwargs.lr = opt_kwargs.lr * mb_ratio
+        opt_kwargs.betas = [beta ** mb_ratio for beta in opt_kwargs.betas]
+
+        if 'lrt' not in opt_kwargs:
+            return module.parameters(), opt_kwargs
+
+        filter_list = ['tran', 'Tran']
+        base_params = []
+        tran_params = []
+        for pname, param in module.named_parameters():
+            is_tran = any(fname in pname for fname in filter_list)
+            if is_tran:
+                tran_params.append(param)
+            else:
+                base_params.append(param)
+
+        optim_params = [
+            {'params': base_params},
+            {'params': tran_params, 'lr': opt_kwargs.lrt * mb_ratio},
+        ]
+        optim_kwargs = dnnlib.EasyDict()
+        for key, val in opt_kwargs.items():
+            if key != 'lrt':
+                optim_kwargs[key] = val
+        return optim_params, optim_kwargs
+
     for name, module, opt_kwargs, reg_interval in [('G', G, G_opt_kwargs, G_reg_interval), ('D', D, D_opt_kwargs, D_reg_interval)]:
         if reg_interval is None:
-            opt = dnnlib.util.construct_class_by_name(params=module.parameters(), **opt_kwargs) # subclass of torch.optim.Optimizer
+            optim_params, optim_kwargs = _build_optimizer(module, opt_kwargs)
+            opt = dnnlib.util.construct_class_by_name(params=optim_params, **optim_kwargs) # subclass of torch.optim.Optimizer
             phases += [dnnlib.EasyDict(name=name+'both', module=module, opt=opt, interval=1)]
         else: # Lazy regularization.
             mb_ratio = reg_interval / (reg_interval + 1)
-            opt_kwargs = dnnlib.EasyDict(opt_kwargs)
-            opt_kwargs.lr = opt_kwargs.lr * mb_ratio
-            opt_kwargs.betas = [beta ** mb_ratio for beta in opt_kwargs.betas]
-            if 'lrt' in opt_kwargs:
-                filter_list = ['tran', 'Tran']
-                base_params = []
-                tran_params = []
-                for pname, param in module.named_parameters():
-                    flag = False
-                    for fname in filter_list:
-                        if fname in pname:
-                            flag = True
-                    if flag:
-                        tran_params.append(param)
-                    else:
-                        base_params.append(param)
-                optim_params = [{'params': base_params}, {'params': tran_params, 'lr': opt_kwargs.lrt * mb_ratio}]
-                optim_kwargs = dnnlib.EasyDict()
-                for key, val in opt_kwargs.items():
-                    if 'lrt' != key:
-                        optim_kwargs[key] = val
-            else:
-                optim_params = module.parameters()
-                optim_kwargs = opt_kwargs
+            optim_params, optim_kwargs = _build_optimizer(module, opt_kwargs, mb_ratio=mb_ratio)
             opt = dnnlib.util.construct_class_by_name(optim_params, **optim_kwargs)
             phases += [dnnlib.EasyDict(name=name+'main', module=module, opt=opt, interval=1)]
             phases += [dnnlib.EasyDict(name=name+'reg', module=module, opt=opt, interval=reg_interval)]
