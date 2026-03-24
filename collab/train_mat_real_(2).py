@@ -65,6 +65,8 @@ AUG = None
 ENABLE_REL_POS_BIAS = False
 ENABLE_MASK_BIAS = False
 ENABLE_DETERMINISTIC_LATENT_GATE = False
+ENABLE_TRAN_ADAPTER_32 = False
+ENABLE_TRAN_ADAPTER_16 = False
 
 # -----------------------------------------------------------------------------
 
@@ -335,6 +337,10 @@ def build_train_command():
         command.extend(["--enable-mask-bias", str(ENABLE_MASK_BIAS)])
     if ENABLE_DETERMINISTIC_LATENT_GATE:
         command.extend(["--enable-deterministic-latent-gate", str(ENABLE_DETERMINISTIC_LATENT_GATE)])
+    if ENABLE_TRAN_ADAPTER_32:
+        command.extend(["--enable-tran-adapter-32", str(ENABLE_TRAN_ADAPTER_32)])
+    if ENABLE_TRAN_ADAPTER_16:
+        command.extend(["--enable-tran-adapter-16", str(ENABLE_TRAN_ADAPTER_16)])
 
     return command
 

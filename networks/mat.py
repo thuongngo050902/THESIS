@@ -139,6 +139,25 @@ class DeterministicLatentGate(nn.Module):
         return mixed, gate
 
 
+@persistence.persistent_class
+class TransformerResidualAdapter(nn.Module):
+    def __init__(self, dim, reduction=4, activation='lrelu'):
+        super().__init__()
+        hidden_dim = max(dim // reduction, 1)
+        self.tran_adapter_norm = nn.LayerNorm(dim)
+        self.tran_adapter_down = FullyConnectedLayer(in_features=dim, out_features=hidden_dim, activation=activation)
+        self.tran_adapter_up = FullyConnectedLayer(in_features=hidden_dim, out_features=dim)
+        nn.init.zeros_(self.tran_adapter_up.weight)
+        if self.tran_adapter_up.bias is not None:
+            nn.init.zeros_(self.tran_adapter_up.bias)
+
+    def forward(self, x):
+        x = self.tran_adapter_norm(x)
+        x = self.tran_adapter_down(x)
+        x = self.tran_adapter_up(x)
+        return x
+
+
 @misc.profiled_function
 def blend_with_latent_gate(features, latent, latent_gate=None):
     if latent_gate is None:
@@ -248,7 +267,8 @@ class SwinTransformerBlock(nn.Module):
 
     def __init__(self, dim, input_resolution, num_heads, down_ratio=1, window_size=7, shift_size=0,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, enable_rel_pos_bias=False, enable_mask_bias=False):
+                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, enable_rel_pos_bias=False, enable_mask_bias=False,
+                 enable_tran_adapter=False):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -270,6 +290,8 @@ class SwinTransformerBlock(nn.Module):
                                     enable_mask_bias=enable_mask_bias)
 
         self.fuse = FullyConnectedLayer(in_features=dim * 2, out_features=dim, activation='lrelu')
+        self.tran_adapter = TransformerResidualAdapter(dim=dim) if enable_tran_adapter else None
+        self.adapter_alpha = nn.Parameter(torch.zeros([])) if enable_tran_adapter else None
 
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
@@ -362,6 +384,8 @@ class SwinTransformerBlock(nn.Module):
 
         # FFN
         x = self.fuse(torch.cat([shortcut, x], dim=-1))
+        if self.tran_adapter is not None:
+            x = x + self.adapter_alpha.to(x.dtype) * self.tran_adapter(x)
         x = self.mlp(x)
 
         return x, mask
@@ -442,7 +466,8 @@ class BasicLayer(nn.Module):
     def __init__(self, dim, input_resolution, depth, num_heads, window_size, down_ratio=1,
                  mlp_ratio=2., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
-                 enable_rel_pos_bias=False, enable_mask_bias=False):
+                 enable_rel_pos_bias=False, enable_mask_bias=False,
+                 enable_tran_adapter_32=False, enable_tran_adapter_16=False):
 
         super().__init__()
         self.dim = dim
@@ -457,6 +482,11 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
+        enable_tran_adapter = (
+            (input_resolution[0] == 32 and enable_tran_adapter_32)
+            or (input_resolution[0] == 16 and enable_tran_adapter_16)
+        )
+
         # build blocks
         self.blocks = nn.ModuleList([
             SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
@@ -467,7 +497,7 @@ class BasicLayer(nn.Module):
                                  drop=drop, attn_drop=attn_drop,
                                  drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                                  norm_layer=norm_layer, enable_rel_pos_bias=enable_rel_pos_bias,
-                                 enable_mask_bias=enable_mask_bias)
+                                 enable_mask_bias=enable_mask_bias, enable_tran_adapter=enable_tran_adapter)
             for i in range(depth)])
 
         self.conv = Conv2dLayerPartial(in_channels=dim, out_channels=dim, kernel_size=3, activation='lrelu')
@@ -761,7 +791,8 @@ class DecStyleBlock(nn.Module):
 class FirstStage(nn.Module):
     def __init__(self, img_channels, img_resolution=256, dim=180, w_dim=512, use_noise=False, demodulate=True,
                  activation='lrelu', enable_rel_pos_bias=False, enable_mask_bias=False,
-                 enable_deterministic_latent_gate=False):
+                 enable_deterministic_latent_gate=False, enable_tran_adapter_32=False,
+                 enable_tran_adapter_16=False):
         super().__init__()
         res = 64
         self.latent_gate = DeterministicLatentGate(feature_dim=dim, latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
@@ -795,7 +826,8 @@ class FirstStage(nn.Module):
                 BasicLayer(dim=dim, input_resolution=[res, res], depth=depth, num_heads=num_heads,
                            window_size=window_sizes[i], drop_path=dpr[sum(depths[:i]):sum(depths[:i + 1])],
                            downsample=merge, enable_rel_pos_bias=enable_rel_pos_bias,
-                           enable_mask_bias=enable_mask_bias)
+                           enable_mask_bias=enable_mask_bias, enable_tran_adapter_32=enable_tran_adapter_32,
+                           enable_tran_adapter_16=enable_tran_adapter_16)
             )
 
         # global style
@@ -873,6 +905,8 @@ class SynthesisNet(nn.Module):
                  enable_rel_pos_bias = False,
                  enable_mask_bias = False,
                  enable_deterministic_latent_gate = False,
+                 enable_tran_adapter_32 = False,
+                 enable_tran_adapter_16 = False,
                  ):
         super().__init__()
         resolution_log2 = int(np.log2(img_resolution))
@@ -892,6 +926,8 @@ class SynthesisNet(nn.Module):
             enable_rel_pos_bias=enable_rel_pos_bias,
             enable_mask_bias=enable_mask_bias,
             enable_deterministic_latent_gate=enable_deterministic_latent_gate,
+            enable_tran_adapter_32=enable_tran_adapter_32,
+            enable_tran_adapter_16=enable_tran_adapter_16,
         )
         self.latent_gate = DeterministicLatentGate(feature_dim=nf(4), latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
 

@@ -71,6 +71,8 @@ def setup_training_loop_kwargs(
     enable_rel_pos_bias = False, # Enable relative position bias in WindowAttention: <bool>
     enable_mask_bias = False, # Enable mask-aware additive attention bias: <bool>
     enable_deterministic_latent_gate = False, # Enable deterministic latent gating: <bool>
+    enable_tran_adapter_32 = False, # Enable residual adapters in 32x32 transformer layers: <bool>
+    enable_tran_adapter_16 = False, # Enable residual adapters in 16x16 transformer layers: <bool>
 
     # Discriminator augmentation.
     aug        = None, # Augmentation mode: schedule default = 'noaug', otherwise 'ada'/'fixed'
@@ -97,9 +99,15 @@ def setup_training_loop_kwargs(
         enable_mask_bias = False
     if enable_deterministic_latent_gate is None:
         enable_deterministic_latent_gate = False
+    if enable_tran_adapter_32 is None:
+        enable_tran_adapter_32 = False
+    if enable_tran_adapter_16 is None:
+        enable_tran_adapter_16 = False
     assert isinstance(enable_rel_pos_bias, bool)
     assert isinstance(enable_mask_bias, bool)
     assert isinstance(enable_deterministic_latent_gate, bool)
+    assert isinstance(enable_tran_adapter_32, bool)
+    assert isinstance(enable_tran_adapter_16, bool)
 
     # ------------------------------------------
     # General options: gpus, snap, metrics, seed
@@ -240,6 +248,8 @@ def setup_training_loop_kwargs(
     args.G_kwargs.synthesis_kwargs.enable_rel_pos_bias = enable_rel_pos_bias
     args.G_kwargs.synthesis_kwargs.enable_mask_bias = enable_mask_bias
     args.G_kwargs.synthesis_kwargs.enable_deterministic_latent_gate = enable_deterministic_latent_gate
+    args.G_kwargs.synthesis_kwargs.enable_tran_adapter_32 = enable_tran_adapter_32
+    args.G_kwargs.synthesis_kwargs.enable_tran_adapter_16 = enable_tran_adapter_16
     args.G_kwargs.mapping_kwargs.num_layers = spec.map
     # args.G_kwargs.synthesis_kwargs.num_fp16_res = args.D_kwargs.num_fp16_res = 4 # enable mixed-precision training
     # args.G_kwargs.synthesis_kwargs.conv_clamp = args.D_kwargs.conv_clamp = 256 # clamp activations to avoid float16 overflow
@@ -598,6 +608,8 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--enable-rel-pos-bias', help='Enable relative position bias inside WindowAttention', type=bool, metavar='BOOL')
 @click.option('--enable-mask-bias', help='Enable mask-aware additive attention bias', type=bool, metavar='BOOL')
 @click.option('--enable-deterministic-latent-gate', help='Enable deterministic latent gating at MAT blend points', type=bool, metavar='BOOL')
+@click.option('--enable-tran-adapter-32', help='Enable residual adapters in 32x32 transformer layers', type=bool, metavar='BOOL')
+@click.option('--enable-tran-adapter-16', help='Enable residual adapters in 16x16 transformer layers', type=bool, metavar='BOOL')
 
 # Discriminator augmentation.
 @click.option('--aug', help='Augmentation mode [default: auto schedule uses noaug]', type=click.Choice(['noaug', 'ada', 'fixed']))

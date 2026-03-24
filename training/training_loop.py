@@ -236,11 +236,12 @@ def training_loop(
         if 'lrt' not in opt_kwargs:
             return module.parameters(), opt_kwargs
 
-        filter_list = ['tran', 'Tran']
+        # New transformer adapters should opt into the higher lrt group via stable name markers.
+        transformer_markers = ['tran', 'Tran', 'adapter', 'Adapter']
         base_params = []
         tran_params = []
         for pname, param in module.named_parameters():
-            is_tran = any(fname in pname for fname in filter_list)
+            is_tran = any(marker in pname for marker in transformer_markers)
             if is_tran:
                 tran_params.append(param)
             else:
