@@ -12,6 +12,13 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from torch_utils import misc
 from torch_utils import persistence
 from networks.basic_module import FullyConnectedLayer, Conv2dLayer, MappingNet, MinibatchStdLayer, DisFromRGB, DisBlock, StyleConv, ToRGB, get_style_code
+from networks.structure_guidance import (
+    MaskSeverityGate,
+    StructureAwareAttentionBias,
+    StructureEncoder,
+    StructureInputBuilder,
+    StructureResidualAdapter,
+)
 
 
 @misc.profiled_function
@@ -80,6 +87,15 @@ def build_relative_position_index(window_size):
     relative_coords[:, :, 1] += window_size[1] - 1
     relative_coords[:, :, 0] *= 2 * window_size[1] - 1
     return relative_coords.sum(-1)
+
+
+@misc.profiled_function
+def repeat_structure_gate(structure_gate, repeat_count):
+    if structure_gate is None:
+        return None
+    if repeat_count <= 1:
+        return structure_gate
+    return structure_gate.repeat_interleave(repeat_count, dim=0)
 
 
 @persistence.persistent_class
@@ -167,20 +183,10 @@ def blend_with_latent_gate(features, latent, latent_gate=None):
 
 @persistence.persistent_class
 class WindowAttention(nn.Module):
-    r""" Window based multi-head self attention (W-MSA) module with relative position bias.
-    It supports both of shifted and non-shifted window.
-    Args:
-        dim (int): Number of input channels.
-        window_size (tuple[int]): The height and width of the window.
-        num_heads (int): Number of attention heads.
-        qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set
-        attn_drop (float, optional): Dropout ratio of attention weight. Default: 0.0
-        proj_drop (float, optional): Dropout ratio of output. Default: 0.0
-    """
+    r"""Window based multi-head self attention (W-MSA) with optional structure bias."""
 
     def __init__(self, dim, window_size, num_heads, down_ratio=1, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,
-                 enable_rel_pos_bias=False, enable_mask_bias=False):
+                 enable_rel_pos_bias=False, enable_mask_bias=False, enable_structure_guidance=False):
 
         super().__init__()
         self.dim = dim
@@ -199,10 +205,11 @@ class WindowAttention(nn.Module):
         self.relative_position_bias_table = nn.Parameter(torch.zeros(relative_bias_table_size, num_heads))
         self.register_buffer("relative_position_index", build_relative_position_index(self.window_size))
         self.mask_bias = nn.Parameter(torch.zeros(num_heads))
+        self.tran_struct_bias = StructureAwareAttentionBias(dim, num_heads) if enable_structure_guidance else None
 
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, x, mask_windows=None, mask=None):
+    def forward(self, x, mask_windows=None, structure_windows=None, structure_gate=None, mask=None):
         """
         Args:
             x: input features with shape of (num_windows*B, N, C)
@@ -219,6 +226,12 @@ class WindowAttention(nn.Module):
             relative_position_bias = self.relative_position_bias_table[self.relative_position_index[:N, :N].reshape(-1)]
             relative_position_bias = relative_position_bias.view(N, N, -1).permute(2, 0, 1).unsqueeze(0)
             attn = attn + relative_position_bias.to(attn.dtype)
+
+        if self.tran_struct_bias is not None and structure_windows is not None:
+            struct_logits = self.tran_struct_bias(structure_windows)
+            if structure_gate is not None:
+                struct_logits = struct_logits * structure_gate.to(struct_logits.dtype).unsqueeze(-1)
+            attn = attn + struct_logits.permute(0, 2, 1).unsqueeze(-1)
 
         if mask is not None:
             nW = mask.shape[0]
@@ -245,30 +258,14 @@ class WindowAttention(nn.Module):
         x = self.proj(x)
         return x, mask_windows
 
-
 @persistence.persistent_class
 class SwinTransformerBlock(nn.Module):
-    r""" Swin Transformer Block.
-    Args:
-        dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resulotion.
-        num_heads (int): Number of attention heads.
-        window_size (int): Window size.
-        shift_size (int): Shift size for SW-MSA.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
-        drop_path (float, optional): Stochastic depth rate. Default: 0.0
-        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
-    """
+    r"""Swin Transformer Block with optional resume-safe structure guidance."""
 
     def __init__(self, dim, input_resolution, num_heads, down_ratio=1, window_size=7, shift_size=0,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
                  act_layer=nn.GELU, norm_layer=nn.LayerNorm, enable_rel_pos_bias=False, enable_mask_bias=False,
-                 enable_tran_adapter=False):
+                 enable_tran_adapter=False, enable_structure_guidance=False, enable_adaptive_structure_gate=False):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -276,8 +273,8 @@ class SwinTransformerBlock(nn.Module):
         self.window_size = window_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
+        self.enable_adaptive_structure_gate = enable_adaptive_structure_gate
         if min(self.input_resolution) <= self.window_size:
-            # if window size is larger than input resolution, we don't partition windows
             self.shift_size = 0
             self.window_size = min(self.input_resolution)
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
@@ -287,11 +284,14 @@ class SwinTransformerBlock(nn.Module):
         self.attn = WindowAttention(dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
                                     down_ratio=down_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop,
                                     proj_drop=drop, enable_rel_pos_bias=enable_rel_pos_bias,
-                                    enable_mask_bias=enable_mask_bias)
+                                    enable_mask_bias=enable_mask_bias,
+                                    enable_structure_guidance=enable_structure_guidance)
 
         self.fuse = FullyConnectedLayer(in_features=dim * 2, out_features=dim, activation='lrelu')
         self.tran_adapter = TransformerResidualAdapter(dim=dim) if enable_tran_adapter else None
         self.adapter_alpha = nn.Parameter(torch.zeros([])) if enable_tran_adapter else None
+        self.tran_struct_adapter = StructureResidualAdapter(dim=dim) if enable_structure_guidance else None
+        self.struct_alpha = nn.Parameter(torch.zeros([])) if enable_structure_guidance else None
 
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
@@ -304,9 +304,8 @@ class SwinTransformerBlock(nn.Module):
         self.register_buffer("attn_mask", attn_mask)
 
     def calculate_mask(self, x_size):
-        # calculate attention mask for SW-MSA
         H, W = x_size
-        img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
+        img_mask = torch.zeros((1, H, W, 1))
         h_slices = (slice(0, -self.window_size),
                     slice(-self.window_size, -self.shift_size),
                     slice(-self.shift_size, None))
@@ -319,15 +318,13 @@ class SwinTransformerBlock(nn.Module):
                 img_mask[:, h, w, :] = cnt
                 cnt += 1
 
-        mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
+        mask_windows = window_partition(img_mask, self.window_size)
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
         attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
-
         return attn_mask
 
-    def forward(self, x, x_size, mask=None):
-        # H, W = self.input_resolution
+    def forward(self, x, x_size, mask=None, structure_tokens=None, structure_gate=None):
         H, W = x_size
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
@@ -336,40 +333,62 @@ class SwinTransformerBlock(nn.Module):
         x = x.view(B, H, W, C)
         if mask is not None:
             mask = mask.view(B, H, W, 1)
+        if structure_tokens is not None:
+            structure_tokens = structure_tokens.view(B, H, W, C)
 
-        # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
             if mask is not None:
                 shifted_mask = torch.roll(mask, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+            if structure_tokens is not None:
+                shifted_structure = torch.roll(structure_tokens, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
             shifted_x = x
             if mask is not None:
                 shifted_mask = mask
+            if structure_tokens is not None:
+                shifted_structure = structure_tokens
 
-        # partition windows
-        x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
-        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+        x_windows = window_partition(shifted_x, self.window_size)
+        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)
         if mask is not None:
             mask_windows = window_partition(shifted_mask, self.window_size)
             mask_windows = mask_windows.view(-1, self.window_size * self.window_size, 1)
         else:
             mask_windows = None
-
-        # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
-        if self.input_resolution == x_size:
-            attn_windows, mask_windows = self.attn(x_windows, mask_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+        if structure_tokens is not None:
+            structure_windows = window_partition(shifted_structure, self.window_size)
+            structure_windows = structure_windows.view(-1, self.window_size * self.window_size, C)
         else:
-            attn_windows, mask_windows = self.attn(x_windows, mask_windows, mask=self.calculate_mask(x_size).to(x.device))  # nW*B, window_size*window_size, C
+            structure_windows = None
 
-        # merge windows
+        structure_window_gate = None
+        if self.enable_adaptive_structure_gate and structure_gate is not None:
+            structure_window_gate = repeat_structure_gate(structure_gate, x_windows.shape[0] // B)
+
+        if self.input_resolution == x_size:
+            attn_windows, mask_windows = self.attn(
+                x_windows,
+                mask_windows,
+                structure_windows,
+                structure_window_gate,
+                mask=self.attn_mask,
+            )
+        else:
+            attn_windows, mask_windows = self.attn(
+                x_windows,
+                mask_windows,
+                structure_windows,
+                structure_window_gate,
+                mask=self.calculate_mask(x_size).to(x.device),
+            )
+
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+        shifted_x = window_reverse(attn_windows, self.window_size, H, W)
         if mask is not None:
             mask_windows = mask_windows.view(-1, self.window_size, self.window_size, 1)
             shifted_mask = window_reverse(mask_windows, self.window_size, H, W)
 
-        # reverse cyclic shift
         if self.shift_size > 0:
             x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
             if mask is not None:
@@ -382,14 +401,17 @@ class SwinTransformerBlock(nn.Module):
         if mask is not None:
             mask = mask.view(B, H * W, 1)
 
-        # FFN
         x = self.fuse(torch.cat([shortcut, x], dim=-1))
         if self.tran_adapter is not None:
             x = x + self.adapter_alpha.to(x.dtype) * self.tran_adapter(x)
+        if self.tran_struct_adapter is not None and structure_tokens is not None:
+            struct_delta = self.tran_struct_adapter(structure_tokens.view(B, H * W, C))
+            if self.enable_adaptive_structure_gate and structure_gate is not None:
+                struct_delta = struct_delta * structure_gate.to(struct_delta.dtype).unsqueeze(-1)
+            x = x + self.struct_alpha.to(x.dtype) * struct_delta
         x = self.mlp(x)
 
         return x, mask
-
 
 @persistence.persistent_class
 class PatchMerging(nn.Module):
@@ -445,39 +467,27 @@ class PatchUpsampling(nn.Module):
 
 @persistence.persistent_class
 class BasicLayer(nn.Module):
-    """ A basic Swin Transformer layer for one stage.
-    Args:
-        dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resolution.
-        depth (int): Number of blocks.
-        num_heads (int): Number of attention heads.
-        window_size (int): Local window size.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
-        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
-    """
+    """A basic Swin Transformer layer for one stage."""
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size, down_ratio=1,
                  mlp_ratio=2., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
                  enable_rel_pos_bias=False, enable_mask_bias=False,
-                 enable_tran_adapter_32=False, enable_tran_adapter_16=False):
+                 enable_tran_adapter_32=False, enable_tran_adapter_16=False,
+                 enable_structure_guidance=False, enable_structure_fuse_32=False,
+                 enable_structure_fuse_16=False, enable_adaptive_structure_gate=False):
 
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.depth = depth
         self.use_checkpoint = use_checkpoint
+        self.enable_struct_here = enable_structure_guidance and (
+            (input_resolution[0] == 32 and enable_structure_fuse_32)
+            or (input_resolution[0] == 16 and enable_structure_fuse_16)
+        )
 
-        # patch merging layer
         if downsample is not None:
-            # self.downsample = downsample(input_resolution, dim=dim, norm_layer=norm_layer)
             self.downsample = downsample
         else:
             self.downsample = None
@@ -487,7 +497,6 @@ class BasicLayer(nn.Module):
             or (input_resolution[0] == 16 and enable_tran_adapter_16)
         )
 
-        # build blocks
         self.blocks = nn.ModuleList([
             SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
                                  num_heads=num_heads, down_ratio=down_ratio, window_size=window_size,
@@ -497,20 +506,31 @@ class BasicLayer(nn.Module):
                                  drop=drop, attn_drop=attn_drop,
                                  drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                                  norm_layer=norm_layer, enable_rel_pos_bias=enable_rel_pos_bias,
-                                 enable_mask_bias=enable_mask_bias, enable_tran_adapter=enable_tran_adapter)
+                                 enable_mask_bias=enable_mask_bias, enable_tran_adapter=enable_tran_adapter,
+                                 enable_structure_guidance=self.enable_struct_here,
+                                 enable_adaptive_structure_gate=enable_adaptive_structure_gate)
             for i in range(depth)])
 
         self.conv = Conv2dLayerPartial(in_channels=dim, out_channels=dim, kernel_size=3, activation='lrelu')
 
-    def forward(self, x, x_size, mask=None):
+    def forward(self, x, x_size, mask=None, structure_features=None, structure_gate=None):
         if self.downsample is not None:
             x, x_size, mask = self.downsample(x, x_size, mask)
         identity = x
+
+        structure_tokens = None
+        if self.enable_struct_here and structure_features is not None:
+            structure_feature = structure_features.get(int(x_size[0]))
+            if structure_feature is not None:
+                if tuple(structure_feature.shape[-2:]) != tuple(x_size):
+                    structure_feature = F.interpolate(structure_feature, size=x_size, mode='bilinear', align_corners=False)
+                structure_tokens = feature2token(structure_feature.to(dtype=token2feature(x, x_size).dtype))
+
         for blk in self.blocks:
-            if self.use_checkpoint:
+            if self.use_checkpoint and structure_tokens is None and structure_gate is None:
                 x, mask = checkpoint.checkpoint(blk, x, x_size, mask)
             else:
-                x, mask = blk(x, x_size, mask)
+                x, mask = blk(x, x_size, mask, structure_tokens=structure_tokens, structure_gate=structure_gate)
         if mask is not None:
             mask = token2feature(mask, x_size)
         x, mask = self.conv(token2feature(x, x_size), mask)
@@ -518,7 +538,6 @@ class BasicLayer(nn.Module):
         if mask is not None:
             mask = feature2token(mask)
         return x, x_size, mask
-
 
 @persistence.persistent_class
 class ToToken(nn.Module):
@@ -792,7 +811,9 @@ class FirstStage(nn.Module):
     def __init__(self, img_channels, img_resolution=256, dim=180, w_dim=512, use_noise=False, demodulate=True,
                  activation='lrelu', enable_rel_pos_bias=False, enable_mask_bias=False,
                  enable_deterministic_latent_gate=False, enable_tran_adapter_32=False,
-                 enable_tran_adapter_16=False):
+                 enable_tran_adapter_16=False, enable_structure_guidance=False,
+                 enable_structure_fuse_16=False, enable_structure_fuse_32=False,
+                 enable_adaptive_structure_gate=False):
         super().__init__()
         res = 64
         self.latent_gate = DeterministicLatentGate(feature_dim=dim, latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
@@ -800,12 +821,11 @@ class FirstStage(nn.Module):
         self.conv_first = Conv2dLayerPartial(in_channels=img_channels+1, out_channels=dim, kernel_size=3, activation=activation)
         self.enc_conv = nn.ModuleList()
         down_time = int(np.log2(img_resolution // res))
-        for i in range(down_time):  # from input size to 64
+        for i in range(down_time):
             self.enc_conv.append(
                 Conv2dLayerPartial(in_channels=dim, out_channels=dim, kernel_size=3, down=2, activation=activation)
             )
 
-        # from 64 -> 16 -> 64
         depths = [2, 3, 4, 3, 2]
         ratios = [1, 1/2, 1/2, 2, 2]
         num_heads = 6
@@ -827,10 +847,13 @@ class FirstStage(nn.Module):
                            window_size=window_sizes[i], drop_path=dpr[sum(depths[:i]):sum(depths[:i + 1])],
                            downsample=merge, enable_rel_pos_bias=enable_rel_pos_bias,
                            enable_mask_bias=enable_mask_bias, enable_tran_adapter_32=enable_tran_adapter_32,
-                           enable_tran_adapter_16=enable_tran_adapter_16)
+                           enable_tran_adapter_16=enable_tran_adapter_16,
+                           enable_structure_guidance=enable_structure_guidance,
+                           enable_structure_fuse_16=enable_structure_fuse_16,
+                           enable_structure_fuse_32=enable_structure_fuse_32,
+                           enable_adaptive_structure_gate=enable_adaptive_structure_gate)
             )
 
-        # global style
         down_conv = []
         for i in range(int(np.log2(16))):
             down_conv.append(Conv2dLayer(in_channels=dim, out_channels=dim, kernel_size=3, down=2, activation=activation))
@@ -842,17 +865,17 @@ class FirstStage(nn.Module):
 
         style_dim = dim * 3
         self.dec_conv = nn.ModuleList()
-        for i in range(down_time):  # from 64 to input size
+        for i in range(down_time):
             res = res * 2
             self.dec_conv.append(DecStyleBlock(res, dim, dim, activation, style_dim, use_noise, demodulate, img_channels))
 
-    def forward(self, images_in, masks_in, ws, noise_mode='random'):
+    def forward(self, images_in, masks_in, ws, noise_mode='random', structure_features=None, structure_gate=None):
         x = torch.cat([masks_in - 0.5, images_in * masks_in], dim=1)
 
         skips = []
-        x, mask = self.conv_first(x, masks_in)  # input size
+        x, mask = self.conv_first(x, masks_in)
         skips.append(x)
-        for i, block in enumerate(self.enc_conv):  # input size to 64
+        for i, block in enumerate(self.enc_conv):
             x, mask = block(x, mask)
             if i != len(self.enc_conv) - 1:
                 skips.append(x)
@@ -861,15 +884,15 @@ class FirstStage(nn.Module):
         x = feature2token(x)
         mask = feature2token(mask)
         mid = len(self.tran) // 2
-        for i, block in enumerate(self.tran):  # 64 to 16
+        for i, block in enumerate(self.tran):
             if i < mid:
-                x, x_size, mask = block(x, x_size, mask)
+                x, x_size, mask = block(x, x_size, mask, structure_features=structure_features, structure_gate=structure_gate)
                 skips.append(x)
             elif i > mid:
-                x, x_size, mask = block(x, x_size, None)
+                x, x_size, mask = block(x, x_size, None, structure_features=structure_features, structure_gate=structure_gate)
                 x = x + skips[mid - i]
             else:
-                x, x_size, mask = block(x, x_size, None)
+                x, x_size, mask = block(x, x_size, None, structure_features=structure_features, structure_gate=structure_gate)
 
                 ws_style = self.ws_style(ws[:, -1])
                 add_n = self.to_square(ws_style).unsqueeze(1)
@@ -883,30 +906,33 @@ class FirstStage(nn.Module):
         for i, block in enumerate(self.dec_conv):
             x, img = block(x, img, style, skips[len(self.dec_conv)-i-1], noise_mode=noise_mode)
 
-        # ensemble
         img = img * (1 - masks_in) + images_in * masks_in
 
         return img
 
-
 @persistence.persistent_class
 class SynthesisNet(nn.Module):
     def __init__(self,
-                 w_dim,                     # Intermediate latent (W) dimensionality.
-                 img_resolution,            # Output image resolution.
-                 img_channels   = 3,        # Number of color channels.
-                 channel_base   = 32768,    # Overall multiplier for the number of channels.
-                 channel_decay  = 1.0,
-                 channel_max    = 512,      # Maximum number of channels in any layer.
-                 activation     = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
-                 drop_rate      = 0.5,
-                 use_noise      = True,
-                 demodulate     = True,
-                 enable_rel_pos_bias = False,
-                 enable_mask_bias = False,
-                 enable_deterministic_latent_gate = False,
-                 enable_tran_adapter_32 = False,
-                 enable_tran_adapter_16 = False,
+                 w_dim,
+                 img_resolution,
+                 img_channels=3,
+                 channel_base=32768,
+                 channel_decay=1.0,
+                 channel_max=512,
+                 activation='lrelu',
+                 drop_rate=0.5,
+                 use_noise=True,
+                 demodulate=True,
+                 enable_rel_pos_bias=False,
+                 enable_mask_bias=False,
+                 enable_deterministic_latent_gate=False,
+                 enable_tran_adapter_32=False,
+                 enable_tran_adapter_16=False,
+                 enable_structure_guidance=False,
+                 enable_structure_fuse_16=False,
+                 enable_structure_fuse_stage2=False,
+                 enable_structure_fuse_32=False,
+                 enable_adaptive_structure_gate=False,
                  ):
         super().__init__()
         resolution_log2 = int(np.log2(img_resolution))
@@ -915,8 +941,9 @@ class SynthesisNet(nn.Module):
         self.num_layers = resolution_log2 * 2 - 3 * 2
         self.img_resolution = img_resolution
         self.resolution_log2 = resolution_log2
+        self.enable_structure_guidance = enable_structure_guidance
+        self.enable_structure_fuse_stage2 = enable_structure_guidance and enable_structure_fuse_stage2
 
-        # first stage
         self.first_stage = FirstStage(
             img_channels,
             img_resolution=img_resolution,
@@ -928,10 +955,32 @@ class SynthesisNet(nn.Module):
             enable_deterministic_latent_gate=enable_deterministic_latent_gate,
             enable_tran_adapter_32=enable_tran_adapter_32,
             enable_tran_adapter_16=enable_tran_adapter_16,
+            enable_structure_guidance=enable_structure_guidance,
+            enable_structure_fuse_16=enable_structure_fuse_16,
+            enable_structure_fuse_32=enable_structure_fuse_32,
+            enable_adaptive_structure_gate=enable_adaptive_structure_gate,
         )
         self.latent_gate = DeterministicLatentGate(feature_dim=nf(4), latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
 
-        # second stage
+        if enable_structure_guidance:
+            self.structure_input_builder = StructureInputBuilder()
+            self.structure_encoder = StructureEncoder(out_dim=180)
+            self.mask_severity_gate = MaskSeverityGate(182) if enable_adaptive_structure_gate else None
+        else:
+            self.structure_input_builder = None
+            self.structure_encoder = None
+            self.mask_severity_gate = None
+
+        if self.enable_structure_fuse_stage2:
+            self.stage2_structure_proj = Conv2dLayer(in_channels=180, out_channels=nf(4), kernel_size=1, activation='linear')
+            self.stage2_structure_alpha = nn.Parameter(torch.zeros([]))
+            nn.init.zeros_(self.stage2_structure_proj.weight)
+            if self.stage2_structure_proj.bias is not None:
+                nn.init.zeros_(self.stage2_structure_proj.bias)
+        else:
+            self.stage2_structure_proj = None
+            self.stage2_structure_alpha = None
+
         self.enc = Encoder(resolution_log2, img_channels, activation, patch_size=5, channels=16)
         self.to_square = FullyConnectedLayer(in_features=w_dim, out_features=16*16, activation=activation)
         self.to_style = ToStyle(in_channels=nf(4), out_channels=nf(2) * 2, activation=activation, drop_rate=drop_rate)
@@ -939,34 +988,52 @@ class SynthesisNet(nn.Module):
         self.dec = Decoder(resolution_log2, activation, style_dim, use_noise, demodulate, img_channels)
 
     def forward(self, images_in, masks_in, ws, noise_mode='random', return_stg1=False):
-        out_stg1 = self.first_stage(images_in, masks_in, ws, noise_mode=noise_mode)
+        structure_features = None
+        structure_gate = None
+        if self.enable_structure_guidance:
+            structure_input, boundary = self.structure_input_builder(images_in, masks_in)
+            structure_features = self.structure_encoder(structure_input)
+            if self.mask_severity_gate is not None:
+                pooled_struct = F.adaptive_avg_pool2d(structure_features[16], 1).flatten(start_dim=1)
+                pooled_boundary = F.adaptive_avg_pool2d(boundary, 1).flatten(start_dim=1)
+                pooled_mask = F.adaptive_avg_pool2d(1 - masks_in, 1).flatten(start_dim=1)
+                structure_gate = self.mask_severity_gate(pooled_struct, pooled_boundary, pooled_mask)
 
-        # encoder
+        out_stg1 = self.first_stage(
+            images_in,
+            masks_in,
+            ws,
+            noise_mode=noise_mode,
+            structure_features=structure_features,
+            structure_gate=structure_gate,
+        )
+
         x = images_in * masks_in + out_stg1 * (1 - masks_in)
         x = torch.cat([masks_in - 0.5, x, images_in * masks_in], dim=1)
         E_features = self.enc(x)
 
         fea_16 = E_features[4]
+        if self.stage2_structure_proj is not None and structure_features is not None:
+            struct_stage2 = self.stage2_structure_proj(structure_features[16])
+            if structure_gate is not None:
+                struct_stage2 = struct_stage2 * structure_gate.to(struct_stage2.dtype).view(-1, 1, 1, 1)
+            fea_16 = fea_16 + self.stage2_structure_alpha.to(fea_16.dtype) * struct_stage2
+
         add_n = self.to_square(ws[:, 0]).view(-1, 16, 16).unsqueeze(1)
         add_n = F.interpolate(add_n, size=fea_16.size()[-2:], mode='bilinear', align_corners=False)
         fea_16_tokens, _latent_gate = blend_with_latent_gate(feature2token(fea_16), feature2token(add_n), self.latent_gate)
         fea_16 = token2feature(fea_16_tokens, fea_16.size()[-2:])
         E_features[4] = fea_16
 
-        # style
         gs = self.to_style(fea_16)
-
-        # decoder
         img = self.dec(fea_16, ws, gs, E_features, noise_mode=noise_mode)
 
-        # ensemble
         img = img * (1 - masks_in) + images_in * masks_in
 
         if not return_stg1:
             return img
         else:
             return img, out_stg1
-
 
 @persistence.persistent_class
 class Generator(nn.Module):

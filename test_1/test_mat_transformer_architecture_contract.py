@@ -52,6 +52,14 @@ class MatTransformerArchitectureContractTest(unittest.TestCase):
         self.assertIn("enable_tran_adapter_16", text)
         self.assertIn("input_resolution", text)
 
+    def test_mat_declares_adaptive_structure_transformer_hooks(self):
+        text = self.read_text()
+        self.assertIn("enable_structure_guidance", text)
+        self.assertIn("enable_adaptive_structure_gate", text)
+        self.assertIn("tran_struct_bias", text)
+        self.assertIn("tran_struct_adapter", text)
+        self.assertIn("struct_alpha", text)
+
 
 if __name__ == "__main__":
     unittest.main()

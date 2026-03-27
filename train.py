@@ -73,6 +73,11 @@ def setup_training_loop_kwargs(
     enable_deterministic_latent_gate = False, # Enable deterministic latent gating: <bool>
     enable_tran_adapter_32 = False, # Enable residual adapters in 32x32 transformer layers: <bool>
     enable_tran_adapter_16 = False, # Enable residual adapters in 16x16 transformer layers: <bool>
+    enable_structure_guidance = False, # Enable adaptive structure guidance modules: <bool>
+    enable_structure_fuse_16 = False, # Enable structure fusion in 16x16 transformer layers: <bool>
+    enable_structure_fuse_stage2 = False, # Enable structure fusion in the stage-2 16x16 bottleneck: <bool>
+    enable_structure_fuse_32 = False, # Enable structure fusion in 32x32 transformer layers: <bool>
+    enable_adaptive_structure_gate = False, # Enable mask-severity conditioned structure gating: <bool>
 
     # Discriminator augmentation.
     aug        = None, # Augmentation mode: schedule default = 'noaug', otherwise 'ada'/'fixed'
@@ -103,11 +108,26 @@ def setup_training_loop_kwargs(
         enable_tran_adapter_32 = False
     if enable_tran_adapter_16 is None:
         enable_tran_adapter_16 = False
+    if enable_structure_guidance is None:
+        enable_structure_guidance = False
+    if enable_structure_fuse_16 is None:
+        enable_structure_fuse_16 = False
+    if enable_structure_fuse_stage2 is None:
+        enable_structure_fuse_stage2 = False
+    if enable_structure_fuse_32 is None:
+        enable_structure_fuse_32 = False
+    if enable_adaptive_structure_gate is None:
+        enable_adaptive_structure_gate = False
     assert isinstance(enable_rel_pos_bias, bool)
     assert isinstance(enable_mask_bias, bool)
     assert isinstance(enable_deterministic_latent_gate, bool)
     assert isinstance(enable_tran_adapter_32, bool)
     assert isinstance(enable_tran_adapter_16, bool)
+    assert isinstance(enable_structure_guidance, bool)
+    assert isinstance(enable_structure_fuse_16, bool)
+    assert isinstance(enable_structure_fuse_stage2, bool)
+    assert isinstance(enable_structure_fuse_32, bool)
+    assert isinstance(enable_adaptive_structure_gate, bool)
 
     # ------------------------------------------
     # General options: gpus, snap, metrics, seed
@@ -250,6 +270,11 @@ def setup_training_loop_kwargs(
     args.G_kwargs.synthesis_kwargs.enable_deterministic_latent_gate = enable_deterministic_latent_gate
     args.G_kwargs.synthesis_kwargs.enable_tran_adapter_32 = enable_tran_adapter_32
     args.G_kwargs.synthesis_kwargs.enable_tran_adapter_16 = enable_tran_adapter_16
+    args.G_kwargs.synthesis_kwargs.enable_structure_guidance = enable_structure_guidance
+    args.G_kwargs.synthesis_kwargs.enable_structure_fuse_16 = enable_structure_fuse_16
+    args.G_kwargs.synthesis_kwargs.enable_structure_fuse_stage2 = enable_structure_fuse_stage2
+    args.G_kwargs.synthesis_kwargs.enable_structure_fuse_32 = enable_structure_fuse_32
+    args.G_kwargs.synthesis_kwargs.enable_adaptive_structure_gate = enable_adaptive_structure_gate
     args.G_kwargs.mapping_kwargs.num_layers = spec.map
     # args.G_kwargs.synthesis_kwargs.num_fp16_res = args.D_kwargs.num_fp16_res = 4 # enable mixed-precision training
     # args.G_kwargs.synthesis_kwargs.conv_clamp = args.D_kwargs.conv_clamp = 256 # clamp activations to avoid float16 overflow
@@ -610,6 +635,11 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--enable-deterministic-latent-gate', help='Enable deterministic latent gating at MAT blend points', type=bool, metavar='BOOL')
 @click.option('--enable-tran-adapter-32', help='Enable residual adapters in 32x32 transformer layers', type=bool, metavar='BOOL')
 @click.option('--enable-tran-adapter-16', help='Enable residual adapters in 16x16 transformer layers', type=bool, metavar='BOOL')
+@click.option('--enable-structure-guidance', help='Enable adaptive structure guidance features', type=bool, metavar='BOOL')
+@click.option('--enable-structure-fuse-16', help='Enable structure-aware fusion in 16x16 transformer layers', type=bool, metavar='BOOL')
+@click.option('--enable-structure-fuse-stage2', help='Enable structure fusion at the stage-2 16x16 bottleneck', type=bool, metavar='BOOL')
+@click.option('--enable-structure-fuse-32', help='Enable structure-aware fusion in 32x32 transformer layers', type=bool, metavar='BOOL')
+@click.option('--enable-adaptive-structure-gate', help='Enable mask-severity conditioned structure gating', type=bool, metavar='BOOL')
 
 # Discriminator augmentation.
 @click.option('--aug', help='Augmentation mode [default: auto schedule uses noaug]', type=click.Choice(['noaug', 'ada', 'fixed']))
