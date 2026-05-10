@@ -1,9 +1,10 @@
 import base64
 import io
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Set, Tuple
 
 import numpy as np
 import PIL.Image
@@ -11,7 +12,6 @@ import torch
 import streamlit as st
 import streamlit.elements.image as st_image
 import streamlit.components.v1 as components
-from streamlit.elements.lib.layout_utils import LayoutConfig
 
 from datasets.mask_generator_512 import RandomMask
 from demo_ui.inference_adapter import (
@@ -22,6 +22,7 @@ from demo_ui.inference_adapter import (
     ensure_binary_mask,
     run_generator_on_inputs,
     run_inference,
+    run_remote_inference,
 )
 
 try:
@@ -30,11 +31,16 @@ except ImportError:  # pragma: no cover - the app can still render the fallback 
     st_canvas = None
 
 try:
+    from streamlit.elements.lib.layout_utils import LayoutConfig
+except ImportError:  # pragma: no cover - Streamlit 1.40 keeps image_to_url elsewhere.
+    LayoutConfig = None
+
+try:
     from streamlit.elements.lib.image_utils import image_to_url as _streamlit_image_to_url
 except ImportError:  # pragma: no cover - older/newer Streamlit variants.
     _streamlit_image_to_url = None
 
-if _streamlit_image_to_url is not None and not hasattr(st_image, "image_to_url"):
+if _streamlit_image_to_url is not None and LayoutConfig is not None and not hasattr(st_image, "image_to_url"):
     def _image_to_url_compat(image, width, clamp, channels, output_format, image_id):
         return _streamlit_image_to_url(
             image,
@@ -74,6 +80,10 @@ PHASE2_FINAL_CHECKPOINT = str(
     Path("/home/subnh3/projects/ThuongNgo/PHASE_2/runs/faceart_phase2_tran_adapter/00014-train-places512-ep30-schedmedium-lr2.5e-05-lrt0.0001-pr0.1-ffl0.02-nopl-batch4-tc0.5-sm0.5-ema10-noaug-resumecustom/network-snapshot-000072.pkl")
 )
 MAT_BASELINE_CHECKPOINT = str(Path("/home/subnh3/projects/ThuongNgo/THESIS/checkpoints/Places_512_FullData.pkl"))
+DEFAULT_COLAB_API_ENDPOINT = os.environ.get(
+    "COLAB_API_WITH_NGROK",
+    "https://salaried-easter-epileptic.ngrok-free.dev",
+)
 
 
 @dataclass
@@ -85,6 +95,7 @@ class StageArtifact:
 def init_session_state():
     defaults = {
         "selected_stage": "Input&Mask",
+        "inference_result": None,
         "final_output_result": None,
         "stage1_result": None,
         "mat_original_result": None,
@@ -96,12 +107,12 @@ def init_session_state():
         "mask_source": "preset",
         "uploaded_image": None,
         "uploaded_mask": None,
-        "backend_mode": InferenceBackendMode.LOCAL.value,
+        "backend_mode": InferenceBackendMode.REMOTE.value,
         "preset_name": "Custom",
         "stage1_checkpoint": PHASE1_CHECKPOINT,
         "final_checkpoint": PHASE2_FINAL_CHECKPOINT,
         "mat_original_checkpoint": MAT_BASELINE_CHECKPOINT,
-        "remote_endpoint": "",
+        "remote_endpoint": DEFAULT_COLAB_API_ENDPOINT,
         "mask_position": "center",
         "mask_scale": 1.0,
         "mask_seed": 0,
@@ -230,7 +241,7 @@ def centered_shift(mask: np.ndarray, target_cy: int, target_cx: int) -> np.ndarr
     return out
 
 
-def resize_mask(mask: np.ndarray, scale: float, target_shape: tuple[int, int]) -> np.ndarray:
+def resize_mask(mask: np.ndarray, scale: float, target_shape: Tuple[int, int]) -> np.ndarray:
     scale = float(np.clip(scale, 0.5, 1.8))
     src_h, src_w = mask.shape
     dst_h, dst_w = target_shape
@@ -286,7 +297,7 @@ def build_mask_canvas_initial_drawing(overlay_src: str, width: int, height: int)
     }
 
 
-def shift_binary_mask(mask: np.ndarray, left: float, top: float, scale_x: float, scale_y: float, canvas_size: tuple[int, int]) -> np.ndarray:
+def shift_binary_mask(mask: np.ndarray, left: float, top: float, scale_x: float, scale_y: float, canvas_size: Tuple[int, int]) -> np.ndarray:
     src_h, src_w = mask.shape
     dst_w, dst_h = canvas_size
     scaled_w = max(1, int(round(src_w * scale_x)))
@@ -315,13 +326,13 @@ def next_stage(stage: str) -> str:
     return PIPELINE_STEPS[min(idx + 1, len(PIPELINE_STEPS) - 1)]
 
 
-def completed_stages() -> set[str]:
+def completed_stages() -> Set[str]:
     done = set()
     if st.session_state.get("uploaded_image") is not None and st.session_state.get("binary_mask") is not None:
         done.add("Input&Mask")
     if st.session_state.get("input_confirmed"):
         done.add("Masked Input")
-    if st.session_state.get("stage1_result") is not None:
+    if st.session_state.get("stage1_result") is not None or st.session_state.get("final_output_result") is not None:
         done.add("Stage 1")
     if st.session_state.get("final_output_result") is not None:
         done.add("Final Output")
@@ -364,7 +375,7 @@ def generate_preset_mask(image: PIL.Image.Image, position_key: str, seed: int) -
     return ensure_binary_mask(mask_image, image.size)
 
 
-def extract_mask_from_canvas(raw_state: Optional[dict], base_mask: np.ndarray, canvas_size: tuple[int, int]) -> np.ndarray:
+def extract_mask_from_canvas(raw_state: Optional[dict], base_mask: np.ndarray, canvas_size: Tuple[int, int]) -> np.ndarray:
     if not raw_state:
         return base_mask
     objects = raw_state.get("objects") or []
@@ -605,7 +616,11 @@ def render_stage_details(image: Optional[PIL.Image.Image], mask: Optional[PIL.Im
         cols[1].image(apply_tinted_overlay(image, mask), caption="Overlay Preview", use_container_width=True)
         return
     if selected_stage == "Stage 1":
-        stage1_result = st.session_state.get("stage1_result") or ensure_stage1_result(image, mask)
+        try:
+            stage1_result = st.session_state.get("stage1_result") or ensure_stage1_result(image, mask)
+        except Exception as exc:
+            st.error(f"Stage 1 inference failed: {exc}")
+            return
         if stage1_result is None:
             st.info("Stage 1 becomes available after the finetune+loss checkpoint can run on the confirmed input.")
             return
@@ -661,6 +676,36 @@ def ensure_mat_original_result(image: Optional[PIL.Image.Image], mask: Optional[
 def ensure_stage1_result(image: Optional[PIL.Image.Image], mask: Optional[PIL.Image.Image]) -> Optional[StageArtifact]:
     if image is None or mask is None:
         return None
+
+    if st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value:
+        endpoint = st.session_state.get("remote_endpoint", "").strip()
+        if not endpoint:
+            return None
+
+        preview_key = (
+            "remote",
+            endpoint,
+            "stage1",
+            image_signature(image),
+            mask_signature(mask),
+        )
+        cache = st.session_state.setdefault("stage1_cache", {})
+        if preview_key not in cache:
+            remote_result = run_remote_inference(
+                image=image,
+                mask_image=mask,
+                preset=build_preset_from_state(),
+                checkpoint="stage1",
+            )
+            cache[preview_key] = StageArtifact(
+                image=remote_result.final_image,
+                notes=remote_result.pipeline_notes.get(
+                    "stage1",
+                    "Loaded lazily from the remote Stage 1 checkpoint.",
+                ),
+            )
+        st.session_state["stage1_result"] = cache[preview_key]
+        return cache[preview_key]
 
     checkpoint_path = st.session_state.get("stage1_checkpoint", "").strip()
     if not checkpoint_path:
@@ -850,9 +895,20 @@ def main():
                     help="Local inference uses CUDA when available for faster run time.",
                 )
                 st.selectbox("Checkpoint presets", options=list(DEFAULT_PRESETS.keys()), key="preset_name")
-                st.text_input("Stage 1 checkpoint", key="stage1_checkpoint", help="Phase 1 final checkpoint used for the Stage 1 output.")
-                st.text_input("Final checkpoint", key="final_checkpoint", help="Phase 3 final checkpoint used for the completed restoration output.")
-                st.text_input("Remote endpoint", key="remote_endpoint", help="Used only when Backend Mode is remote.")
+                remote_selected = st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value
+                st.text_input(
+                    "Stage 1 checkpoint",
+                    key="stage1_checkpoint",
+                    disabled=remote_selected,
+                    help="Local mode only. Remote mode sends checkpoint=stage1 to the Colab API.",
+                )
+                st.text_input(
+                    "Final checkpoint",
+                    key="final_checkpoint",
+                    disabled=remote_selected,
+                    help="Local mode only. Remote mode sends checkpoint=final to the Colab API.",
+                )
+                st.text_input("Remote endpoint", key="remote_endpoint", help="Base ngrok URL or full /infer URL used when Backend Mode is remote.")
                 st.session_state["uploaded_mask"] = st.file_uploader("Upload mask file (optional)", type=["png", "jpg", "jpeg"])
 
             current_mask = render_mask_builder(image, interactive=True)
@@ -887,10 +943,14 @@ def main():
                     st.error("Confirm the input package before running inference.")
                 else:
                     preset = build_preset_from_state()
-                    if not preset.stage1_checkpoint:
+                    remote_selected = st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value
+                    if remote_selected and not preset.remote_endpoint:
+                        st.error("Remote endpoint is required for Colab inference.")
+                        return
+                    if not remote_selected and not preset.stage1_checkpoint:
                         st.error("Stage 1 checkpoint path is required. Use the Phase 1 final checkpoint.")
                         return
-                    if not preset.final_checkpoint:
+                    if not remote_selected and not preset.final_checkpoint:
                         st.error("Final checkpoint path is required. Use the Phase 3 final checkpoint.")
                         return
                     with st.spinner("Running restoration pipeline..."):
@@ -912,11 +972,12 @@ def main():
                                     preset=preset,
                                     device_name=st.session_state["device_name"],
                                 )
+                                st.session_state["inference_result"] = remote_result
                                 st.session_state["final_output_result"] = StageArtifact(
                                     image=remote_result.final_image,
                                     notes=remote_result.pipeline_notes.get("final", "Remote final output."),
                                 )
-                        except ValueError as exc:
+                        except Exception as exc:
                             st.session_state["final_output_result"] = None
                             st.error(str(exc))
                         else:

@@ -1,5 +1,6 @@
 import base64
 import io
+from urllib.parse import urljoin
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
@@ -45,8 +46,32 @@ def pil_to_base64(image: PIL.Image.Image) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
+def pil_to_png_buffer(image: PIL.Image.Image) -> io.BytesIO:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+
+
 def base64_to_pil(payload: str) -> PIL.Image.Image:
     return PIL.Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGB")
+
+
+def normalize_infer_endpoint(endpoint: str) -> str:
+    endpoint = endpoint.strip()
+    if not endpoint:
+        raise ValueError("A remote endpoint is required for remote inference.")
+    if endpoint.rstrip("/").endswith("/infer"):
+        return endpoint.rstrip("/")
+    return urljoin(endpoint.rstrip("/") + "/", "infer")
+
+
+def raise_for_remote_error(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        body = response.text[:4000] if response.text else str(exc)
+        raise RuntimeError(f"Colab inference failed ({response.status_code}): {body}") from exc
 
 
 def ensure_rgb(image: PIL.Image.Image) -> PIL.Image.Image:
@@ -86,7 +111,8 @@ def output_tensor_to_pil(output: torch.Tensor) -> PIL.Image.Image:
 def get_generator(network_pkl: str, device: torch.device):
     cache_key = (network_pkl, device.type)
     if cache_key not in _GENERATOR_CACHE:
-        generator, _generator_key, _network_data = load_generator_for_inference(network_pkl, device)
+        loaded = load_generator_for_inference(network_pkl, device)
+        generator = loaded[0] if isinstance(loaded, tuple) else loaded
         _GENERATOR_CACHE[cache_key] = generator
     return _GENERATOR_CACHE[cache_key]
 
@@ -155,6 +181,7 @@ def run_remote_inference(
     image: PIL.Image.Image,
     mask_image: PIL.Image.Image,
     preset: CheckpointPreset,
+    checkpoint: str = "final",
     timeout_seconds: int = 120,
 ) -> InferenceResult:
     if not preset.remote_endpoint:
@@ -164,30 +191,36 @@ def run_remote_inference(
     binary_mask = ensure_binary_mask(mask_image, input_image.size)
     masked_input_image = apply_mask_preview(input_image, binary_mask)
 
+    image_buffer = pil_to_png_buffer(input_image)
+    mask_buffer = pil_to_png_buffer(binary_mask)
     response = requests.post(
-        preset.remote_endpoint,
-        json={
-            "image_base64": pil_to_base64(input_image),
-            "mask_base64": pil_to_base64(binary_mask.convert("RGB")),
-            "stage1_checkpoint": preset.stage1_checkpoint,
-            "final_checkpoint": preset.final_checkpoint,
+        normalize_infer_endpoint(preset.remote_endpoint),
+        files={
+            "image": ("image.png", image_buffer, "image/png"),
+            "mask": ("mask.png", mask_buffer, "image/png"),
         },
+        data={
+            "checkpoint": checkpoint,
+            "response_format": "json",
+        },
+        headers={"ngrok-skip-browser-warning": "true"},
         timeout=timeout_seconds,
     )
-    response.raise_for_status()
+    raise_for_remote_error(response)
     payload = response.json()
+    final_image = base64_to_pil(payload["final_image_base64"])
 
     return InferenceResult(
         input_image=input_image,
         binary_mask=binary_mask,
         masked_input_image=masked_input_image,
-        stage1_image=base64_to_pil(payload["stage1_image"]),
-        final_image=base64_to_pil(payload["final_image"]),
+        stage1_image=final_image if checkpoint == "stage1" else masked_input_image,
+        final_image=final_image,
         pipeline_notes=payload.get(
             "pipeline_notes",
             {
-                "backend": "Remote inference",
-                "stage1": "Remote service returned the Stage 1 intermediate result.",
+                "backend": f"Remote Colab inference via checkpoint '{checkpoint}'",
+                "stage1": "Stage 1 is loaded lazily from the remote checkpoint when this tab is opened.",
                 "final": "Remote service returned the final restoration result.",
             },
         ),
@@ -199,9 +232,10 @@ def run_inference(
     image: PIL.Image.Image,
     mask_image: PIL.Image.Image,
     preset: CheckpointPreset,
+    device_name: Optional[str] = None,
 ) -> InferenceResult:
     if backend_mode == InferenceBackendMode.LOCAL:
-        return run_local_inference(image=image, mask_image=mask_image, preset=preset)
+        return run_local_inference(image=image, mask_image=mask_image, preset=preset, device_name=device_name)
     if backend_mode == InferenceBackendMode.REMOTE:
-        return run_remote_inference(image=image, mask_image=mask_image, preset=preset)
+        return run_remote_inference(image=image, mask_image=mask_image, preset=preset, checkpoint="final")
     raise ValueError(f"Unsupported backend mode: {backend_mode}")

@@ -1,5 +1,7 @@
 from pathlib import Path
 import unittest
+import importlib.util
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,11 +14,17 @@ def read_text(path):
 
 
 class StreamlitUiContractTest(unittest.TestCase):
+    def test_streamlit_app_imports_with_installed_streamlit_version(self):
+        spec = importlib.util.spec_from_file_location("streamlit_app_import_contract", APP_PATH)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        self.assertTrue(hasattr(module, "main"))
+
     def test_streamlit_app_declares_expected_pipeline_steps(self):
         source = read_text(APP_PATH)
         self.assertIn("PIPELINE_STEPS", source)
-        self.assertIn('"Input"', source)
-        self.assertIn('"Mask"', source)
+        self.assertIn('"Input&Mask"', source)
         self.assertIn('"Masked Input"', source)
         self.assertIn('"Stage 1"', source)
         self.assertIn('"Final Output"', source)
@@ -25,7 +33,7 @@ class StreamlitUiContractTest(unittest.TestCase):
         source = read_text(APP_PATH)
         self.assertIn("Advanced Controls", source)
         self.assertIn("Upload mask file (optional)", source)
-        self.assertIn("Enable compare view", source)
+        self.assertIn("Compare", source)
         self.assertIn("Backend Mode", source)
         self.assertIn("Checkpoint presets", source)
 
@@ -51,6 +59,16 @@ class StreamlitUiContractTest(unittest.TestCase):
         self.assertIn("final_image", source)
         self.assertIn("masked_input_image", source)
         self.assertIn("pipeline_notes", source)
+
+    def test_remote_mode_marks_stage1_complete_after_final_output(self):
+        source = read_text(APP_PATH)
+        self.assertIn('done.add("Stage 1")', source)
+        self.assertIn('st.session_state.get("final_output_result") is not None', source)
+
+    def test_streamlit_app_lazy_loads_remote_stage1(self):
+        source = read_text(APP_PATH)
+        self.assertIn('checkpoint="stage1"', source)
+        self.assertIn('st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value', source)
 
 
 if __name__ == "__main__":
