@@ -1,0 +1,16 @@
+\babel@toc {english}{}\relax 
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {2.1}{\ignorespaces Representative Modern Inpainting Methods Relevant to This Thesis}}{24}{}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {3.1}{\ignorespaces Summary of training objectives and optimization settings.}}{40}{}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {4.1}{\ignorespaces Development environment used for implementation and experimentation.}}{43}{}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Model and training configuration used in the experiments.}}{44}{}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Summary of the artwork data prepared for Chapter~4 experiments.}}{45}{}%
+\contentsline {table}{\numberline {4.4}{\ignorespaces Summary of the damage-mask preparation used in Chapter~4 experiments.}}{46}{}%
+\contentsline {table}{\numberline {4.5}{\ignorespaces Baseline methods used for comparison in the experiments.}}{49}{}%
+\contentsline {table}{\numberline {4.6}{\ignorespaces Quantitative comparison of restoration performance against baselines and recent methods.}}{50}{}%
+\contentsline {table}{\numberline {4.7}{\ignorespaces Evaluation metrics used to assess restoration performance.}}{52}{}%
+\contentsline {table}{\numberline {4.8}{\ignorespaces Checkpoint-based ablation comparison of the selected thesis checkpoints under the prepared evaluation setting.}}{53}{}%
+\addvspace {10\p@ }

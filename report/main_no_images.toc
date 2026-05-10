@@ -1,0 +1,46 @@
+\babel@toc {english}{}\relax 
+\contentsline {chapter}{Acknowledgments}{3}{}%
+\contentsline {chapter}{List of Figures}{7}{}%
+\contentsline {chapter}{List of Tables}{8}{}%
+\contentsline {chapter}{Abstract}{9}{}%
+\contentsline {chapter}{\numberline {1}Introduction}{10}{}%
+\contentsline {section}{\numberline {1.1}Background}{10}{}%
+\contentsline {section}{\numberline {1.2}Problem Statement}{12}{}%
+\contentsline {section}{\numberline {1.3}Scope and Research Goal}{13}{}%
+\contentsline {subsection}{\numberline {1.3.1}Project Scope}{13}{}%
+\contentsline {subsection}{\numberline {1.3.2}Research Goal}{13}{}%
+\contentsline {section}{\numberline {1.4}Structure of the Thesis}{14}{}%
+\contentsline {chapter}{\numberline {2}Literature Review}{15}{}%
+\contentsline {section}{\numberline {2.1}Overview of Image Inpainting Techniques}{15}{}%
+\contentsline {section}{\numberline {2.2}Traditional Inpainting Methods}{16}{}%
+\contentsline {section}{\numberline {2.3}Deep Learning--Based Inpainting Approaches}{16}{}%
+\contentsline {section}{\numberline {2.4}Transformer-Based and Diffusion-Based Inpainting Methods}{19}{}%
+\contentsline {section}{\numberline {2.5}Chapter Summary}{24}{}%
+\contentsline {chapter}{\numberline {3}Methodology}{26}{}%
+\contentsline {section}{\numberline {3.1}Framework Overview}{26}{}%
+\contentsline {section}{\numberline {3.2}Stage 1 Coarse Restoration}{29}{}%
+\contentsline {section}{\numberline {3.3}Transformer Body}{31}{}%
+\contentsline {subsection}{\numberline {3.3.1}Transformer Reasoning in PARF}{31}{}%
+\contentsline {subsection}{\numberline {3.3.2}Residual Adapter Enhancement}{32}{}%
+\contentsline {section}{\numberline {3.4}Style Conditioning and Latent Guidance}{33}{}%
+\contentsline {section}{\numberline {3.5}Stage 2 Refinement}{34}{}%
+\contentsline {subsection}{\numberline {3.5.1}Refinement Encoder and Bottleneck Fusion}{35}{}%
+\contentsline {subsection}{\numberline {3.5.2}Refinement Decoder and Final Reconstruction}{35}{}%
+\contentsline {section}{\numberline {3.6}Training Objective and Optimization Strategy}{37}{}%
+\contentsline {subsection}{\numberline {3.6.1}Loss Functions}{37}{}%
+\contentsline {subsection}{\numberline {3.6.2}Optimization Strategy}{39}{}%
+\contentsline {section}{\numberline {3.7}Chapter Summary}{42}{}%
+\contentsline {chapter}{\numberline {4}Experiments and Results}{43}{}%
+\contentsline {section}{\numberline {4.1}Implementation Details}{43}{}%
+\contentsline {section}{\numberline {4.2}Dataset Preparation}{44}{}%
+\contentsline {section}{\numberline {4.3}Results and Discussion}{46}{}%
+\contentsline {section}{\numberline {4.4}Comparison}{48}{}%
+\contentsline {subsection}{\numberline {4.4.1}Baseline Methods}{48}{}%
+\contentsline {subsection}{\numberline {4.4.2}Quantitative Comparison}{49}{}%
+\contentsline {subsection}{\numberline {4.4.3}Qualitative Comparison}{50}{}%
+\contentsline {section}{\numberline {4.5}Evaluation}{52}{}%
+\contentsline {subsection}{\numberline {4.5.1}Evaluation Metrics}{52}{}%
+\contentsline {subsection}{\numberline {4.5.2}Ablation Study}{53}{}%
+\contentsline {subsection}{\numberline {4.5.3}Limitation}{54}{}%
+\contentsline {section}{\numberline {4.6}Chapter Summary}{55}{}%
+\contentsline {chapter}{\numberline {5}Conclusion and Future Work}{57}{}%
