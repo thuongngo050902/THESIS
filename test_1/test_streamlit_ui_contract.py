@@ -70,6 +70,10 @@ class StreamlitUiContractTest(unittest.TestCase):
         self.assertIn('checkpoint="stage1"', source)
         self.assertIn('st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value', source)
 
+    def test_colab_api_allows_missing_params_for_stage1_checkpoint(self):
+        source = read_text(ROOT / "colab_inference_api.py")
+        self.assertIn('allow_missing_params=(checkpoint == "stage1")', source)
+
 
 if __name__ == "__main__":
     unittest.main()

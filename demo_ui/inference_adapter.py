@@ -108,10 +108,14 @@ def output_tensor_to_pil(output: torch.Tensor) -> PIL.Image.Image:
     return PIL.Image.fromarray(output[0].cpu().numpy(), mode="RGB")
 
 
-def get_generator(network_pkl: str, device: torch.device):
-    cache_key = (network_pkl, device.type)
+def get_generator(network_pkl: str, device: torch.device, allow_missing_params: bool = False):
+    cache_key = (network_pkl, device.type, bool(allow_missing_params))
     if cache_key not in _GENERATOR_CACHE:
-        loaded = load_generator_for_inference(network_pkl, device)
+        loaded = load_generator_for_inference(
+            network_pkl,
+            device,
+            allow_missing_params=allow_missing_params,
+        )
         generator = loaded[0] if isinstance(loaded, tuple) else loaded
         _GENERATOR_CACHE[cache_key] = generator
     return _GENERATOR_CACHE[cache_key]
@@ -124,8 +128,9 @@ def run_generator_on_inputs(
     device: torch.device,
     truncation_psi: float = 1.0,
     noise_mode: str = "const",
+    allow_missing_params: bool = False,
 ) -> PIL.Image.Image:
-    generator = get_generator(network_pkl, device)
+    generator = get_generator(network_pkl, device, allow_missing_params=allow_missing_params)
     image_tensor = image_to_tensor(image, device)
     mask_tensor = mask_to_tensor(mask_image, device)
     label = torch.zeros([1, generator.c_dim], device=device)
@@ -158,7 +163,7 @@ def run_local_inference(
     masked_input_image = apply_mask_preview(input_image, binary_mask)
 
     stage1_checkpoint = preset.stage1_checkpoint or preset.final_checkpoint
-    stage1_image = run_generator_on_inputs(stage1_checkpoint, input_image, binary_mask, device)
+    stage1_image = run_generator_on_inputs(stage1_checkpoint, input_image, binary_mask, device, allow_missing_params=bool(preset.stage1_checkpoint))
     final_image = run_generator_on_inputs(preset.final_checkpoint, input_image, binary_mask, device)
 
     stage1_note = "Uses the Stage 1 checkpoint path." if preset.stage1_checkpoint else "Uses the final checkpoint as a fallback Stage 1 preview."

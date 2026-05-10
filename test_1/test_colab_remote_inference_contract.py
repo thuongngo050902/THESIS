@@ -51,6 +51,18 @@ class ColabRemoteInferenceContractTest(unittest.TestCase):
 
         self.assertIs(result, generator)
 
+    def test_get_generator_can_allow_missing_stage1_params(self):
+        generator = object()
+        device = type("Device", (), {"type": "cpu"})()
+        _GENERATOR_CACHE.clear()
+
+        with patch("demo_ui.inference_adapter.load_generator_for_inference") as load:
+            load.return_value = generator
+            result = get_generator("stage1.pkl", device, allow_missing_params=True)
+
+        self.assertIs(result, generator)
+        load.assert_called_once_with("stage1.pkl", device, allow_missing_params=True)
+
     def test_remote_inference_posts_multipart_pngs_to_infer_endpoint(self):
         output = image((90, 80, 70))
         preset = CheckpointPreset(

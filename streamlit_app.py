@@ -728,6 +728,7 @@ def ensure_stage1_result(image: Optional[PIL.Image.Image], mask: Optional[PIL.Im
             image,
             mask,
             torch.device(st.session_state.get("device_name", "cpu")),
+            allow_missing_params=True,
         )
         cache[preview_key] = StageArtifact(
             image=stage1_image,

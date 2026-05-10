@@ -104,6 +104,7 @@ async def infer(
                 input_image,
                 mask_image,
                 device,
+                allow_missing_params=(checkpoint == "stage1"),
             )
 
         elapsed = time.time() - started
