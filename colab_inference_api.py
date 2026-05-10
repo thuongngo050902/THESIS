@@ -62,6 +62,10 @@ def check_checkpoint_exists(name: str) -> str:
     return checkpoint_path
 
 
+def allows_missing_checkpoint_params(name: str) -> bool:
+    return name in {"stage1", "mat_baseline"}
+
+
 @app.get("/health")
 def health():
     return {
@@ -104,7 +108,7 @@ async def infer(
                 input_image,
                 mask_image,
                 device,
-                allow_missing_params=(checkpoint == "stage1"),
+                allow_missing_params=allows_missing_checkpoint_params(checkpoint),
             )
 
         elapsed = time.time() - started

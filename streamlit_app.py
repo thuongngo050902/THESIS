@@ -80,6 +80,7 @@ PHASE2_FINAL_CHECKPOINT = str(
     Path("/home/subnh3/projects/ThuongNgo/PHASE_2/runs/faceart_phase2_tran_adapter/00014-train-places512-ep30-schedmedium-lr2.5e-05-lrt0.0001-pr0.1-ffl0.02-nopl-batch4-tc0.5-sm0.5-ema10-noaug-resumecustom/network-snapshot-000072.pkl")
 )
 MAT_BASELINE_CHECKPOINT = str(Path("/home/subnh3/projects/ThuongNgo/THESIS/checkpoints/Places_512_FullData.pkl"))
+MAT_BASELINE_REMOTE_CHECKPOINT = "mat_baseline"
 DEFAULT_COLAB_API_ENDPOINT = os.environ.get(
     "COLAB_API_WITH_NGROK",
     "https://salaried-easter-epileptic.ngrok-free.dev",
@@ -643,8 +644,41 @@ def render_stage_details(image: Optional[PIL.Image.Image], mask: Optional[PIL.Im
 
 
 def ensure_mat_original_result(image: Optional[PIL.Image.Image], mask: Optional[PIL.Image.Image]) -> Optional[StageArtifact]:
+    if image is None or mask is None:
+        return None
+
+    cache = st.session_state.setdefault("mat_original_cache", {})
+    if st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value:
+        endpoint = st.session_state.get("remote_endpoint", "").strip()
+        if not endpoint:
+            return None
+
+        baseline_key = (
+            "remote",
+            endpoint,
+            MAT_BASELINE_REMOTE_CHECKPOINT,
+            image_signature(image),
+            mask_signature(mask),
+        )
+        if baseline_key not in cache:
+            remote_result = run_remote_inference(
+                image=image,
+                mask_image=mask,
+                preset=build_preset_from_state(),
+                checkpoint=MAT_BASELINE_REMOTE_CHECKPOINT,
+            )
+            cache[baseline_key] = StageArtifact(
+                image=remote_result.final_image,
+                notes=remote_result.pipeline_notes.get(
+                    "final",
+                    "Optional MAT original baseline comparison.",
+                ),
+            )
+        st.session_state["mat_original_result"] = cache[baseline_key]
+        return cache[baseline_key]
+
     checkpoint_path = st.session_state.get("mat_original_checkpoint", "").strip()
-    if image is None or mask is None or not checkpoint_path:
+    if not checkpoint_path:
         return None
     checkpoint = Path(checkpoint_path)
     if not checkpoint.exists():
@@ -662,12 +696,12 @@ def ensure_mat_original_result(image: Optional[PIL.Image.Image], mask: Optional[
             backend_mode=InferenceBackendMode.LOCAL,
             image=image,
             mask_image=mask,
-            preset=CheckpointPreset(name="MAT-original baseline", final_checkpoint=checkpoint_path),
+            preset=CheckpointPreset(name="MAT original baseline", final_checkpoint=checkpoint_path),
             device_name=st.session_state.get("device_name", None),
         ).final_image
         cache[baseline_key] = StageArtifact(
             image=baseline_image,
-            notes="Optional MAT-original baseline comparison.",
+            notes="Optional MAT original baseline comparison.",
         )
     st.session_state["mat_original_result"] = cache[baseline_key]
     return cache[baseline_key]
@@ -789,9 +823,9 @@ def render_compare_page(image: Optional[PIL.Image.Image], mask: Optional[PIL.Ima
             st.rerun()
 
     with st.expander("Advanced Compare"):
-        include_mat_baseline = st.checkbox("Include MAT-original baseline", key="include_mat_baseline")
+        include_mat_baseline = st.checkbox("Include MAT original baseline", key="include_mat_baseline")
         st.text_input(
-            "MAT-original checkpoint",
+            "MAT original checkpoint",
             key="mat_original_checkpoint",
             help="Optional original MAT checkpoint path used only for compare view.",
         )
@@ -813,12 +847,12 @@ def render_compare_page(image: Optional[PIL.Image.Image], mask: Optional[PIL.Ima
         compare_options.append("Final Output")
         compare_defaults.append("Final Output")
     if mat_original_result is not None:
-        compare_options.append("MAT-original baseline")
-        compare_defaults.append("MAT-original baseline")
+        compare_options.append("MAT original baseline")
+        compare_defaults.append("MAT original baseline")
 
     selected_items = st.multiselect("Compare items", compare_options, default=compare_defaults)
     if include_mat_baseline and mat_original_result is None:
-        st.info("MAT-original baseline is unavailable until the required input or inference result exists.")
+        st.info("MAT original baseline is unavailable until the required input or inference result exists.")
 
     if not selected_items:
         st.info("Select at least one item to compare.")
@@ -838,7 +872,7 @@ def render_compare_page(image: Optional[PIL.Image.Image], mask: Optional[PIL.Ima
         elif item == "Final Output":
             final_result = st.session_state.get("final_output_result")
             compare_image = final_result.image if final_result is not None else None
-        elif item == "MAT-original baseline":
+        elif item == "MAT original baseline":
             mat_original_result = st.session_state.get("mat_original_result") or ensure_mat_original_result(image, mask)
             compare_image = mat_original_result.image if mat_original_result is not None else None
 
