@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 
+# Load variables from a local .env file (e.g. COLAB_API_WITH_NGROK) sitting next to this
+# script, if python-dotenv is installed. Streamlit does not read .env on its own.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().with_name(".env"))
+except ImportError:
+    pass
+
 import numpy as np
 import PIL.Image
 import torch
