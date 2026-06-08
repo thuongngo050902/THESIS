@@ -22,6 +22,13 @@ import streamlit.elements.image as st_image
 import streamlit.components.v1 as components
 
 from datasets.mask_generator_512 import RandomMask
+from datasets.shape_masks import (
+    cross_mask,
+    focused_random_mask,
+    random_hole_range_for_scale,
+    rect_mask,
+    scribble_mask,
+)
 from demo_ui.inference_adapter import (
     CheckpointPreset,
     InferenceBackendMode,
@@ -95,6 +102,40 @@ DEFAULT_COLAB_API_ENDPOINT = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# PARF 3-step redesign (Create Input -> Input -> Output)
+# ---------------------------------------------------------------------------
+PARF_STEPS = [("create", "Create Input"), ("input", "Input"), ("output", "Output")]
+
+PARF_MASK_SHAPES = [
+    ("cross", "✚ Cross"),
+    ("rect", "▭ Rect"),
+    ("scribble", "〰 Scribble"),
+    ("random", "⚄ Random"),
+]
+PARF_SHAPE_LABEL_TO_KEY = {label: key for key, label in PARF_MASK_SHAPES}
+PARF_SHAPE_KEY_TO_LABEL = {key: label for key, label in PARF_MASK_SHAPES}
+
+# 3x3 position grid -> (x_fraction, y_fraction) of the image for the mark center.
+PARF_POSITION_PRESETS = {
+    "tl": (0.30, 0.30), "tc": (0.50, 0.28), "tr": (0.70, 0.30),
+    "cl": (0.28, 0.50), "center": (0.50, 0.50), "cr": (0.72, 0.50),
+    "bl": (0.30, 0.70), "bc": (0.50, 0.72), "br": (0.70, 0.70),
+}
+PARF_POSITION_GRID = [["tl", "tc", "tr"], ["cl", "center", "cr"], ["bl", "bc", "br"]]
+PARF_POSITION_GLYPHS = {
+    "tl": "↖", "tc": "↑", "tr": "↗",
+    "cl": "←", "center": "●", "cr": "→",
+    "bl": "↙", "bc": "↓", "br": "↘",
+}
+
+# Real control ranges carried over from the wireframe handoff.
+PARF_MASK_SCALE_MIN = 0.25
+PARF_MASK_SCALE_MAX = 1.00
+PARF_MASK_SCALE_STEP = 0.05
+PARF_NUDGE_CLAMP = (0.12, 0.88)  # mark center stays within 12%-88% of the image bounds
+
+
 @dataclass
 class StageArtifact:
     image: PIL.Image.Image
@@ -131,6 +172,19 @@ def init_session_state():
         "include_mat_baseline": False,
         "mask_canvas_state": None,
         "device_name": "cuda" if torch.cuda.is_available() else "cpu",
+        # --- PARF 3-step redesign state ---
+        "parf_step": "create",
+        "parf_shape": "cross",
+        "parf_shape_radio": "cross",
+        "parf_position": "center",
+        "parf_scale": 1.0,
+        "parf_move_step": 20,
+        "parf_seed": 1234,
+        "parf_nudge_x": 0,
+        "parf_nudge_y": 0,
+        "parf_mask_generated": False,
+        "parf_mask_sig_cache": None,
+        "parf_confirmed_sig": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state or st.session_state[key] in (None, ""):
@@ -251,7 +305,7 @@ def centered_shift(mask: np.ndarray, target_cy: int, target_cx: int) -> np.ndarr
 
 
 def resize_mask(mask: np.ndarray, scale: float, target_shape: Tuple[int, int]) -> np.ndarray:
-    scale = float(np.clip(scale, 0.5, 1.8))
+    scale = float(np.clip(scale, 0.1, 1.8))
     src_h, src_w = mask.shape
     dst_h, dst_w = target_shape
     new_h = max(1, int(round(src_h * scale)))
@@ -906,7 +960,8 @@ def build_preset_from_state() -> CheckpointPreset:
     )
 
 
-def main():
+def _legacy_pipeline_demo():
+    """Pre-redesign 4-tab pipeline UI. Kept for reference; not called by main()."""
     st.set_page_config(page_title="PARF Thesis Demo UI", layout="wide")
     init_session_state()
 
@@ -1044,6 +1099,386 @@ def main():
                 st.write(current_artifact.notes)
                 st.write("Loss apply: training-time losses belong to the thesis explanation layer, not to the main inference pipeline UI.")
                 st.write("This demo focuses on observable reconstruction stages: Input&Mask, Masked Input, Stage 1, and Final Output.")
+
+
+def inject_parf_theme():
+    st.markdown(
+        """
+        <style>
+        .block-container { max-width: 1180px; padding-top: 2.2rem; }
+        [data-testid="stImage"] img { border-radius: 10px; border: 1px solid #E5E7EB; }
+        .parf-title { font-size: 2.35rem; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 0.2rem; }
+        .parf-title .accent { color: #3B6EA5; }
+        .parf-eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.72rem;
+                        color: #6B7280; font-weight: 700; margin: 0 0 0.4rem; }
+        .parf-oneliner { color: #6B7280; font-size: 1.0rem; margin: 0.1rem 0 1.2rem; }
+        .parf-oneliner b { color: #1F2933; }
+        .parf-phase-head { display: flex; align-items: center; gap: 0.55rem; margin: 0.4rem 0 0.5rem; }
+        .parf-badge { width: 1.7rem; height: 1.7rem; border-radius: 50%; background: #3B6EA5;
+                      color: #fff; display: flex; align-items: center; justify-content: center;
+                      font-weight: 700; font-size: 0.95rem; flex: 0 0 auto; }
+        .parf-badge.locked { background: #CBD5E1; }
+        .parf-phase-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+        .parf-chip { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem;
+                     border: 1px solid #D1D5DB; border-radius: 10px; padding: 0.4rem 0.7rem;
+                     background: #F9FAFB; font-size: 0.9rem; }
+        .parf-empty { border: 1.5px dashed #CBD5E1; border-radius: 10px; padding: 2.6rem 1rem;
+                      text-align: center; color: #9AA5B1; font-size: 0.9rem; background: #FAFBFC; }
+        .parf-locked-note { color: #9AA5B1; font-size: 0.8rem; font-style: italic; }
+        /* Keep the live preview in view while the taller controls column scrolls. */
+        div[data-testid="stColumn"]:has(.parf-preview-marker) {
+            position: sticky; top: 1.25rem; align-self: flex-start;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _embed_centered(base_square: np.ndarray, target_shape: Tuple[int, int]) -> np.ndarray:
+    """Place a square (s, s) mask (keep=1/hole=0) centered onto an (H, W) all-keep canvas."""
+    height, width = target_shape
+    side = base_square.shape[0]
+    canvas = np.ones((height, width), dtype=np.float32)
+    offset_y = max((height - side) // 2, 0)
+    offset_x = max((width - side) // 2, 0)
+    copy_h = min(side, height)
+    copy_w = min(side, width)
+    canvas[offset_y:offset_y + copy_h, offset_x:offset_x + copy_w] = base_square[:copy_h, :copy_w]
+    return canvas
+
+
+def parf_base_shape_mask(shape: str, mask_size: int, scale: float, seed: int) -> np.ndarray:
+    """Centered (mask_size, mask_size) mask for a geometric mark (1=keep, 0=hole).
+
+    Random is handled separately in parf_build_mask via the MAT face-focused test spec.
+    """
+    if shape == "rect":
+        return rect_mask(mask_size, scale)
+    if shape == "scribble":
+        return scribble_mask(mask_size, scale, seed)
+    return cross_mask(mask_size, scale)
+
+
+def parf_mask_signature() -> tuple:
+    """Identity of the current mark configuration (shape/position/scale/seed/nudge)."""
+    return (
+        st.session_state["parf_shape"],
+        st.session_state["parf_position"],
+        round(float(st.session_state["parf_scale"]), 3),
+        int(st.session_state["parf_seed"]),
+        int(st.session_state["parf_nudge_x"]),
+        int(st.session_state["parf_nudge_y"]),
+    )
+
+
+def parf_build_mask(image: PIL.Image.Image) -> PIL.Image.Image:
+    """Build the binary mask (L mode, 255=keep, 0=hole) from the current create-step state."""
+    width, height = image.size
+    shape = st.session_state["parf_shape"]
+    scale = float(st.session_state["parf_scale"])
+    seed = int(st.session_state["parf_seed"])
+    pos_x, pos_y = PARF_POSITION_PRESETS.get(st.session_state["parf_position"], (0.5, 0.5))
+    nudge_x = int(st.session_state["parf_nudge_x"])
+    nudge_y = int(st.session_state["parf_nudge_y"])
+    lo, hi = PARF_NUDGE_CLAMP
+
+    if shape == "random":
+        # MAT face-focused test spec: RandomMask(512) -> centered_shift(target) -> hole-ratio
+        # retry. Computed at 512 (the model's working resolution) then fit to the image.
+        # The Scale slider drives the hole ratio; no geometric resize is applied.
+        canvas = 512
+        target_cx = pos_x * canvas + (nudge_x / max(1, width)) * canvas
+        target_cy = pos_y * canvas + (nudge_y / max(1, height)) * canvas
+        target_cx = int(np.clip(target_cx, lo * canvas, hi * canvas))
+        target_cy = int(np.clip(target_cy, lo * canvas, hi * canvas))
+        mask_arr = focused_random_mask(
+            canvas, (target_cy, target_cx), random_hole_range_for_scale(scale), seed
+        )
+        mask_image = PIL.Image.fromarray((mask_arr * 255).astype(np.uint8), mode="L")
+        return ensure_binary_mask(mask_image, image.size)
+
+    # Geometric marks (cross / rect / scribble): built centered, then positioned in image space.
+    mask_size = max(1, min(width, height))
+    base = parf_base_shape_mask(shape, mask_size, scale, seed)
+    embedded = _embed_centered(base, (height, width))
+    target_cx = int(np.clip(round(width * pos_x) + nudge_x, lo * width, hi * width))
+    target_cy = int(np.clip(round(height * pos_y) + nudge_y, lo * height, hi * height))
+    shifted = centered_shift(embedded, target_cy, target_cx)
+    mask_image = PIL.Image.fromarray((shifted * 255).astype(np.uint8), mode="L")
+    return ensure_binary_mask(mask_image, image.size)
+
+
+def parf_mark_regenerated():
+    """Flag a freshly generated mask, advancing the seed for stochastic shapes."""
+    if st.session_state["parf_shape"] in ("random", "scribble"):
+        st.session_state["parf_seed"] = int(st.session_state["parf_seed"]) + 1
+    st.session_state["parf_mask_generated"] = True
+
+
+def parf_render_step_bar():
+    confirmed = bool(st.session_state.get("input_confirmed"))
+    inferred = st.session_state.get("final_output_result") is not None
+    current = st.session_state.get("parf_step", "create")
+    unlocked = {"create": True, "input": confirmed, "output": inferred}
+    done = {"create": confirmed, "input": inferred, "output": False}
+    notes = {"input": "— confirm step 1 first", "output": "— run inference first"}
+
+    cols = st.columns(3, gap="small")
+    for col, (key, label), num in zip(cols, PARF_STEPS, (1, 2, 3)):
+        with col:
+            prefix = "✓ " if done[key] else f"{num}.  "
+            if st.button(
+                f"{prefix}{label}",
+                key=f"parf_nav_{key}",
+                use_container_width=True,
+                type="primary" if current == key else "secondary",
+                disabled=not unlocked[key],
+            ):
+                st.session_state["parf_step"] = key
+                st.rerun()
+            if not unlocked[key]:
+                st.markdown(f'<span class="parf-locked-note">{notes[key]}</span>', unsafe_allow_html=True)
+
+
+def parf_render_upload_phase() -> Optional[PIL.Image.Image]:
+    st.markdown(
+        '<div class="parf-phase-head"><span class="parf-badge">1</span>'
+        '<p class="parf-phase-title">Upload portrait artwork</p></div>',
+        unsafe_allow_html=True,
+    )
+    uploaded = st.file_uploader(
+        "Drag & drop, or click to browse — PNG · JPG · JPEG (up to 200 MB)",
+        type=["png", "jpg", "jpeg"],
+        key="parf_upload",
+    )
+    st.session_state["uploaded_image"] = uploaded
+    image = load_pil(uploaded)
+
+    if uploaded is None:
+        # Removing the file resets everything downstream (mask, confirm, locks).
+        if st.session_state.get("binary_mask") is not None or st.session_state.get("parf_mask_generated"):
+            st.session_state["binary_mask"] = None
+            st.session_state["parf_mask_generated"] = False
+            st.session_state["parf_mask_sig_cache"] = None
+            invalidate_confirmation_and_results(reset_stage=None)
+        return None
+
+    size_kb = len(uploaded.getvalue()) / 1024.0
+    size_text = f"{size_kb / 1024.0:.1f} MB" if size_kb >= 1024 else f"{size_kb:.1f} KB"
+    st.markdown(
+        f'<div class="parf-chip">📄 <b>{uploaded.name}</b> · {size_text}</div>',
+        unsafe_allow_html=True,
+    )
+    return image
+
+
+def parf_render_mark_phase(image: Optional[PIL.Image.Image]):
+    locked = image is None
+    badge_cls = "parf-badge locked" if locked else "parf-badge"
+    st.markdown(
+        f'<div class="parf-phase-head"><span class="{badge_cls}">2</span>'
+        '<p class="parf-phase-title">Mark configuration</p></div>',
+        unsafe_allow_html=True,
+    )
+    if locked:
+        st.caption("Upload a portrait to enable mark configuration.")
+        return
+
+    st.caption("Generate a mark, choose its shape, then nudge it into place. The preview updates live.")
+
+    gen_label = "Regenerate mask" if st.session_state["parf_mask_generated"] else "Generate mask"
+    if st.button(gen_label, type="primary", key="parf_generate"):
+        parf_mark_regenerated()
+
+    # Mark shape — radio (single-select; always exactly one choice, no deselect/empty state).
+    shape_keys = [key for key, _ in PARF_MASK_SHAPES]
+    previous_shape = st.session_state["parf_shape"]
+    choice = st.radio(
+        "Mark shape",
+        options=shape_keys,
+        format_func=lambda key: PARF_SHAPE_KEY_TO_LABEL[key],
+        horizontal=True,
+        key="parf_shape_radio",
+    )
+    if choice != previous_shape:
+        if choice in ("random", "scribble"):
+            st.session_state["parf_seed"] = int(st.session_state["parf_seed"]) + 1
+        st.session_state["parf_shape"] = choice
+    st.caption("Random → existing MAT-style random-mask generator (face-focused test spec).")
+
+    # Position preset — 3x3 grid.
+    st.markdown("**Position preset**")
+    for row in PARF_POSITION_GRID:
+        grid_cols = st.columns(3, gap="small")
+        for grid_col, pos_key in zip(grid_cols, row):
+            selected = st.session_state["parf_position"] == pos_key
+            if grid_col.button(
+                PARF_POSITION_GLYPHS[pos_key],
+                key=f"parf_pos_{pos_key}",
+                use_container_width=True,
+                type="primary" if selected else "secondary",
+            ):
+                st.session_state["parf_position"] = pos_key
+                st.session_state["parf_nudge_x"] = 0
+                st.session_state["parf_nudge_y"] = 0
+
+    st.slider(
+        "Mask scale",
+        min_value=PARF_MASK_SCALE_MIN,
+        max_value=PARF_MASK_SCALE_MAX,
+        step=PARF_MASK_SCALE_STEP,
+        key="parf_scale",
+    )
+    if st.session_state["parf_shape"] == "random":
+        lo, hi = random_hole_range_for_scale(float(st.session_state["parf_scale"]))
+        st.caption(f"Random sizes by hole-ratio (MAT test spec): ~{lo * 100:.0f}–{hi * 100:.0f}% masked.")
+    st.slider("Move step (px)", min_value=1, max_value=100, step=1, key="parf_move_step")
+
+    st.markdown("**Nudge position**")
+    nudge_cols = st.columns(4, gap="small")
+    step = int(st.session_state["parf_move_step"])
+    nudges = [("← Left", -step, 0), ("→ Right", step, 0), ("↑ Up", 0, -step), ("↓ Down", 0, step)]
+    width, height = image.size
+    pos_x, pos_y = PARF_POSITION_PRESETS.get(st.session_state["parf_position"], (0.5, 0.5))
+    lo, hi = PARF_NUDGE_CLAMP
+    for nudge_col, (label, dx, dy) in zip(nudge_cols, nudges):
+        if nudge_col.button(label, key=f"parf_nudge_{label}", use_container_width=True):
+            # Clamp the accumulated offset to the usable range (mark center stays within
+            # 12%-88%). This stops runaway accumulation, so reversing direction responds
+            # immediately instead of the mark appearing stuck at the edge.
+            nx = int(st.session_state["parf_nudge_x"]) + dx
+            ny = int(st.session_state["parf_nudge_y"]) + dy
+            st.session_state["parf_nudge_x"] = int(np.clip(nx, (lo - pos_x) * width, (hi - pos_x) * width))
+            st.session_state["parf_nudge_y"] = int(np.clip(ny, (lo - pos_y) * height, (hi - pos_y) * height))
+
+
+def parf_compute_live_mask(image: Optional[PIL.Image.Image]) -> Optional[PIL.Image.Image]:
+    """Recompute the mask from current state (cached by config + image size)."""
+    if image is None or not st.session_state["parf_mask_generated"]:
+        if image is None:
+            st.session_state["binary_mask"] = None
+        return None
+
+    cache_key = (parf_mask_signature(), image.size)
+    if st.session_state.get("parf_mask_sig_cache") == cache_key and st.session_state.get("binary_mask") is not None:
+        mask = st.session_state["binary_mask"]
+    else:
+        mask = parf_build_mask(image)
+        st.session_state["binary_mask"] = mask
+        st.session_state["parf_mask_sig_cache"] = cache_key
+
+    # If the package was already confirmed and the mark changed, re-lock step 2.
+    if st.session_state.get("input_confirmed") and st.session_state.get("parf_confirmed_sig") != parf_mask_signature():
+        invalidate_confirmation_and_results(reset_stage=None)
+    return mask
+
+
+def parf_render_create_preview(image: Optional[PIL.Image.Image], mask: Optional[PIL.Image.Image]):
+    st.markdown('<div class="parf-preview-marker"></div>', unsafe_allow_html=True)
+    st.markdown('<p class="parf-eyebrow">Preview</p>', unsafe_allow_html=True)
+    cols = st.columns(2, gap="medium")
+    if image is None:
+        cols[0].markdown('<div class="parf-empty">Binary Mask<br>upload a portrait to preview</div>', unsafe_allow_html=True)
+        cols[1].markdown('<div class="parf-empty">Damaged Portrait Artwork<br>upload a portrait to preview</div>', unsafe_allow_html=True)
+    elif mask is None:
+        cols[0].markdown('<div class="parf-empty">Binary Mask<br>press “Generate mask”</div>', unsafe_allow_html=True)
+        cols[1].image(image, caption="Portrait Artwork — original, no mark yet", use_container_width=True)
+    else:
+        cols[0].image(mask, caption="Binary Mask — white = keep · black = hole", use_container_width=True)
+        cols[1].image(apply_tinted_overlay(image, mask), caption="Damaged Portrait Artwork — mark applied", use_container_width=True)
+
+    st.write("")
+    note_col, button_col = st.columns([0.62, 0.38], vertical_alignment="center")
+    note_col.markdown('<span class="parf-locked-note">Confirm to lock this input package and continue to step 2.</span>', unsafe_allow_html=True)
+    confirm_disabled = image is None or mask is None
+    if button_col.button("Confirm →", type="primary", use_container_width=True, disabled=confirm_disabled, key="parf_confirm"):
+        confirm_current_input(image, mask)
+        st.session_state["parf_confirmed_sig"] = parf_mask_signature()
+        st.session_state["parf_step"] = "input"
+        st.rerun()
+
+
+def parf_render_create_input():
+    st.markdown(
+        '<p class="parf-oneliner"><b>Create Damaged Portrait Artwork and Binary Mask.</b> '
+        'Upload a portrait, then generate &amp; place a mark to define the damaged region.</p>',
+        unsafe_allow_html=True,
+    )
+    controls_col, preview_col = st.columns([0.4, 0.6], gap="large")
+    with controls_col:
+        image = parf_render_upload_phase()
+        parf_render_mark_phase(image)
+    mask = parf_compute_live_mask(image)
+    with preview_col:
+        parf_render_create_preview(image, mask)
+
+
+def parf_render_input_step():
+    st.markdown(
+        '<p class="parf-oneliner"><b>Input.</b> The confirmed input package — a binary mask and the '
+        'damaged portrait artwork. Run inference to reconstruct the masked region.</p>',
+        unsafe_allow_html=True,
+    )
+    action_col, package_col = st.columns([0.4, 0.6], gap="large")
+    with action_col:
+        st.button(
+            "Run inference",
+            type="primary",
+            use_container_width=True,
+            disabled=True,
+            help="Inference wiring is implemented in the next step of the redesign.",
+        )
+        st.caption("Step 1 (Create Input) is complete. Inference for Step 2 lands next.")
+        if st.button("← Back to Create Input", use_container_width=True, key="parf_back_to_create"):
+            st.session_state["parf_step"] = "create"
+            st.rerun()
+    with package_col:
+        st.markdown('<p class="parf-eyebrow">Input package</p>', unsafe_allow_html=True)
+        cols = st.columns(2, gap="medium")
+        mask = st.session_state.get("confirmed_binary_mask")
+        damaged = st.session_state.get("confirmed_masked_input_image")
+        if mask is not None:
+            cols[0].image(mask, caption="Binary Mask", use_container_width=True)
+        if damaged is not None:
+            cols[1].image(damaged, caption="Damaged Portrait Artwork", use_container_width=True)
+
+
+def parf_render_output_step():
+    st.markdown('<p class="parf-oneliner"><b>Output.</b> The restored result.</p>', unsafe_allow_html=True)
+    st.info("Output becomes available after inference runs (next step of the redesign).")
+
+
+def main():
+    st.set_page_config(page_title="PARF — Portrait Artwork Reconstruction Framework", layout="wide")
+    init_session_state()
+    inject_parf_theme()
+
+    st.markdown(
+        '<h1 class="parf-title">Portrait Artwork Reconstruction Framework '
+        '<span class="accent">— Demo</span></h1>',
+        unsafe_allow_html=True,
+    )
+
+    parf_render_step_bar()
+    st.markdown(
+        "<hr style='margin:0.5rem 0 1.2rem;border:none;border-top:1px solid #E5E7EB;'>",
+        unsafe_allow_html=True,
+    )
+
+    # Never render a locked step, even if state was tampered with.
+    step = st.session_state.get("parf_step", "create")
+    if step == "input" and not st.session_state.get("input_confirmed"):
+        step = "create"
+    if step == "output" and st.session_state.get("final_output_result") is None:
+        step = "create"
+
+    if step == "create":
+        parf_render_create_input()
+    elif step == "input":
+        parf_render_input_step()
+    else:
+        parf_render_output_step()
 
 
 if __name__ == "__main__":

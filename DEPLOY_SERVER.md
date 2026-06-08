@@ -4,6 +4,12 @@
 
 Run the thesis-first Streamlit UI for the MAT restoration demo from a clean server checkout.
 
+active venv
+```bash
+source .venv/bin/activate
+cd thesis 
+```
+
 The UI entrypoint is:
 
 ```bash
