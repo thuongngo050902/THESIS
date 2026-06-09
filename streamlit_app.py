@@ -105,9 +105,13 @@ PHASE2_FINAL_CHECKPOINT = str(
 )
 MAT_BASELINE_CHECKPOINT = str(Path("/home/subnh3/projects/ThuongNgo/THESIS/checkpoints/Places_512_FullData.pkl"))
 MAT_BASELINE_REMOTE_CHECKPOINT = "mat_baseline"
-DEFAULT_COLAB_API_ENDPOINT = os.environ.get(
-    "COLAB_API_WITH_NGROK",
-    "https://salaried-easter-epileptic.ngrok-free.dev",
+# The inference HTTP server (FastAPI `colab_inference_api:app`). It handles checkpoint
+# switching (final / stage1 / mat_baseline) internally, so the UI only needs its URL.
+# Defaults to the local CPU backend; override with INFERENCE_API_URL (or the legacy
+# COLAB_API_WITH_NGROK) to point at a remote/ngrok server.
+DEFAULT_INFERENCE_ENDPOINT = os.environ.get(
+    "INFERENCE_API_URL",
+    os.environ.get("COLAB_API_WITH_NGROK", "http://127.0.0.1:8000"),
 )
 
 
@@ -247,7 +251,7 @@ def init_session_state():
         "stage1_checkpoint": PHASE1_CHECKPOINT,
         "final_checkpoint": PHASE2_FINAL_CHECKPOINT,
         "mat_original_checkpoint": MAT_BASELINE_CHECKPOINT,
-        "remote_endpoint": DEFAULT_COLAB_API_ENDPOINT,
+        "remote_endpoint": DEFAULT_INFERENCE_ENDPOINT,
         "mask_position": "center",
         "mask_scale": 1.0,
         "mask_seed": 0,
@@ -1521,34 +1525,31 @@ def parf_render_create_input():
 def parf_ensure_output(image: Optional[PIL.Image.Image], mask: Optional[PIL.Image.Image]) -> Optional[StageArtifact]:
     """Produce (and cache) the final restored Output for the confirmed package.
 
-    Honors the selected backend mode and stores the artifact in
-    ``final_output_result`` (the value the step bar uses to unlock Output).
+    Always calls the inference HTTP server (which handles checkpoint switching
+    internally) and stores the artifact in ``final_output_result`` — the value the
+    step bar uses to unlock Output.
     """
     if image is None or mask is None:
         return None
 
-    if st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value:
-        endpoint = st.session_state.get("remote_endpoint", "").strip()
-        if not endpoint:
-            raise ValueError("A remote endpoint is required for remote inference.")
-        cache = st.session_state.setdefault("final_output_remote_cache", {})
-        cache_key = ("remote", endpoint, "final", image_signature(image), mask_signature(mask))
-        if cache_key not in cache:
-            remote_result = run_remote_inference(
-                image=image,
-                mask_image=mask,
-                preset=build_preset_from_state(),
-                checkpoint="final",
-            )
-            cache[cache_key] = StageArtifact(
-                image=remote_result.final_image,
-                notes=remote_result.pipeline_notes.get("final", "Remote final restoration result."),
-            )
-        st.session_state["final_output_result"] = cache[cache_key]
-        return cache[cache_key]
-
-    # Local backend: ensure_final_output_result handles checkpoint path + caching.
-    return ensure_final_output_result(image, mask)
+    endpoint = st.session_state.get("remote_endpoint", "").strip()
+    if not endpoint:
+        raise ValueError("An inference server URL is required (set it under Advanced).")
+    cache = st.session_state.setdefault("final_output_remote_cache", {})
+    cache_key = (endpoint, "final", image_signature(image), mask_signature(mask))
+    if cache_key not in cache:
+        remote_result = run_remote_inference(
+            image=image,
+            mask_image=mask,
+            preset=build_preset_from_state(),
+            checkpoint="final",
+        )
+        cache[cache_key] = StageArtifact(
+            image=remote_result.final_image,
+            notes=remote_result.pipeline_notes.get("final", "Final restoration result."),
+        )
+    st.session_state["final_output_result"] = cache[cache_key]
+    return cache[cache_key]
 
 
 def parf_run_inference():
@@ -1585,27 +1586,14 @@ def parf_render_input_step():
         if st.button("← Back to Create Input", use_container_width=True, key="parf_back_to_create"):
             st.session_state["parf_step"] = "create"
             st.rerun()
-        with st.expander("Advanced — backend"):
-            st.selectbox(
-                "Backend mode",
-                options=[InferenceBackendMode.REMOTE.value, InferenceBackendMode.LOCAL.value],
-                key="backend_mode",
-            )
+        with st.expander("Advanced — inference server"):
             st.text_input(
-                "Remote endpoint",
+                "Inference server URL",
                 key="remote_endpoint",
-                help="Base ngrok URL or full /infer URL used in remote mode.",
+                help="The inference API (default http://127.0.0.1:8000). It serves the "
+                     "Final, Coarse, and MAT checkpoints itself — no local model paths needed.",
             )
-            remote_selected = st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value
-            st.text_input("Stage 1 checkpoint", key="stage1_checkpoint", disabled=remote_selected)
-            st.text_input("Final checkpoint", key="final_checkpoint", disabled=remote_selected)
-            st.text_input("MAT baseline checkpoint", key="mat_original_checkpoint", disabled=remote_selected)
-            st.selectbox(
-                "Device",
-                options=["cuda", "cpu"],
-                key="device_name",
-                disabled=not torch.cuda.is_available(),
-            )
+            st.caption("Checkpoint switching (Final / Coarse / MAT) is handled by this server.")
     with package_col:
         st.markdown('<p class="parf-eyebrow">Input package</p>', unsafe_allow_html=True)
         cols = st.columns(2, gap="medium")
