@@ -1598,6 +1598,60 @@ def parf_lightbox_items(image, mask) -> list:
     return items
 
 
+def parf_render_compare_card(key: str, items: list, image, mask):
+    """Render one comparison card: image + title/sub-label + reorder buttons."""
+    title, sub = COMPARE_LABELS[key]
+    try:
+        img = parf_compare_image(key, image, mask)
+    except Exception as exc:  # noqa: BLE001 - per-tile failure, surfaced inline
+        img = None
+        st.warning(f"{title} unavailable: {exc}")
+    if img is not None:
+        st.image(img, use_container_width=True)
+    st.markdown(f"**{title}**<br><span class='parf-sub'>{sub}</span>", unsafe_allow_html=True)
+    move_cols = st.columns(2)
+    if move_cols[0].button("◀", key=f"parf_mv_l_{key}", use_container_width=True, disabled=not can_move(items, key, -1)):
+        st.session_state["parf_order"] = reorder(items, key, -1)
+        st.rerun()
+    if move_cols[1].button("▶", key=f"parf_mv_r_{key}", use_container_width=True, disabled=not can_move(items, key, 1)):
+        st.session_state["parf_order"] = reorder(items, key, 1)
+        st.rerun()
+
+
+def parf_render_compare_section(image, mask):
+    cmp = parf_current_cmp()
+    items = compare_items(cmp, st.session_state["parf_order"], st.session_state["parf_removed"])
+    st.session_state["parf_order"] = items  # normalize stored order to the visible list
+
+    head_col, zoom_col = st.columns([0.7, 0.3], vertical_alignment="center")
+    head_col.markdown('<p class="parf-eyebrow">Compare</p>', unsafe_allow_html=True)
+    if zoom_col.button("🔍 Zoom all (synced)", use_container_width=True, key="parf_zoom_all"):
+        parf_open_lightbox("all")
+    st.caption(
+        "Reorder with ◀ ▶ or remove with ✕ to focus the comparison. "
+        "Zoom-all opens a synced view you can lay out as a row or grid."
+    )
+
+    # Removable chips — every item except Output has an x.
+    chip_cols = st.columns(len(items))
+    for col, key in zip(chip_cols, items):
+        title = COMPARE_LABELS[key][0]
+        if key == OUTPUT_KEY:
+            col.markdown(f'<span class="parf-cchip">{title}</span>', unsafe_allow_html=True)
+        elif col.button(f"{title} ✕", key=f"parf_chip_{key}", use_container_width=True):
+            st.session_state["parf_removed"] = set(st.session_state["parf_removed"]) | {key}
+            st.rerun()
+
+    # Comparison grid — rows of up to 3 cards, left-to-right in compare order.
+    per_row = 3
+    for start in range(0, len(items), per_row):
+        row_keys = items[start:start + per_row]
+        grid_cols = st.columns(len(row_keys))
+        for col, key in zip(grid_cols, row_keys):
+            with col:
+                parf_render_compare_card(key, items, image, mask)
+
+
 def parf_render_output_step():
     image = st.session_state.get("confirmed_input_image")
     mask = st.session_state.get("confirmed_binary_mask")
