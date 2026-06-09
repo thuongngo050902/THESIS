@@ -39,6 +39,15 @@ from demo_ui.inference_adapter import (
     run_inference,
     run_remote_inference,
 )
+from demo_ui.parf_compare import (
+    ALL_KEYS,
+    COMPARE_LABELS,
+    OUTPUT_KEY,
+    REFERENCE_KEYS,
+    can_move,
+    compare_items,
+    reorder,
+)
 
 try:
     from streamlit_drawable_canvas import st_canvas
@@ -185,6 +194,17 @@ def init_session_state():
         "parf_mask_generated": False,
         "parf_mask_sig_cache": None,
         "parf_confirmed_sig": None,
+        # --- PARF Step 3 (Output / compare / lightbox) state ---
+        "parf_cmp_masked": True,
+        "parf_cmp_mat": True,
+        "parf_cmp_coarse": True,
+        "parf_cmp_origin": True,
+        "parf_compare_open": False,
+        "parf_order": list(ALL_KEYS),
+        "parf_removed": set(),
+        "parf_lb_open": False,
+        "parf_lb_layout": "row",
+        "parf_lb_scope": "single",
     }
     for key, value in defaults.items():
         if key not in st.session_state or st.session_state[key] in (None, ""):
@@ -1129,6 +1149,11 @@ def inject_parf_theme():
         div[data-testid="stColumn"]:has(.parf-preview-marker) {
             position: sticky; top: 1.25rem; align-self: flex-start;
         }
+        .parf-output { max-width: 760px; margin: 0 auto; }
+        .parf-cchip { display:inline-flex; align-items:center; gap:.4rem; border:1px solid #D1D5DB;
+                      border-radius:999px; padding:.3rem .8rem; background:#F9FAFB; font-size:.85rem;
+                      font-weight:600; }
+        .parf-sub { color:#9AA5B1; font-size:.75rem; }
         </style>
         """,
         unsafe_allow_html=True,
