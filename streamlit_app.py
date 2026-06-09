@@ -206,8 +206,10 @@ PARF_LIGHTBOX_TEMPLATE = """<!doctype html>
     for (var i = 0; i < btns.length; i++) {
       btns[i].onclick = function (e) {
         e.stopPropagation();
-        var card = e.target.closest('.lb-card');
-        var dir = parseInt(e.target.getAttribute('data-move'), 10);
+        var btn = e.currentTarget;
+        var card = btn.closest('.lb-card');
+        if (!card) return;
+        var dir = parseInt(btn.getAttribute('data-move'), 10);
         if (dir < 0 && card.previousElementSibling) track.insertBefore(card, card.previousElementSibling);
         if (dir > 0 && card.nextElementSibling) track.insertBefore(card.nextElementSibling, card);
       };
