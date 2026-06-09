@@ -1538,9 +1538,112 @@ def parf_render_input_step():
             cols[1].image(damaged, caption="Damaged Portrait Artwork", use_container_width=True)
 
 
+def parf_current_cmp() -> dict:
+    """Read the Advanced compare checkboxes into a {key: bool} dict."""
+    return {k: bool(st.session_state.get(f"parf_cmp_{k}", True)) for k in REFERENCE_KEYS}
+
+
+def parf_sync_removed(key: str):
+    """on_change for a compare checkbox: toggling it clears any prior chip-x removal."""
+    st.session_state["parf_removed"] = set(st.session_state["parf_removed"]) - {key}
+
+
+def parf_compare_image(key: str, image, mask):
+    """Resolve a compare key to a PIL image (lazy inference for output/coarse/mat).
+
+    Returns None when the source is not yet available. May raise on backend errors;
+    callers wrap this to surface per-tile messages.
+    """
+    if key == "output":
+        artifact = st.session_state.get("final_output_result") or parf_ensure_output(image, mask)
+        return artifact.image if artifact is not None else None
+    if key == "origin":
+        return st.session_state.get("confirmed_input_image")
+    if key == "masked":
+        return st.session_state.get("confirmed_masked_input_image")
+    if key == "coarse":
+        artifact = ensure_stage1_result(image, mask)
+        return artifact.image if artifact is not None else None
+    if key == "mat":
+        artifact = ensure_mat_original_result(image, mask)
+        return artifact.image if artifact is not None else None
+    return None
+
+
+def parf_open_lightbox(scope: str):
+    st.session_state["parf_lb_open"] = True
+    st.session_state["parf_lb_scope"] = scope
+    st.rerun()
+
+
+def parf_close_lightbox():
+    st.session_state["parf_lb_open"] = False
+
+
+def parf_lightbox_items(image, mask) -> list:
+    """Build [{title, sub, src}] for the lightbox from the current scope."""
+    if st.session_state.get("parf_lb_scope", "single") == "single":
+        keys = [OUTPUT_KEY]
+    else:
+        keys = compare_items(parf_current_cmp(), st.session_state["parf_order"], st.session_state["parf_removed"])
+    items = []
+    for key in keys:
+        try:
+            img = parf_compare_image(key, image, mask)
+        except Exception:  # noqa: BLE001 - a broken tile should not blank the whole lightbox
+            img = None
+        if img is not None:
+            title, sub = COMPARE_LABELS[key]
+            items.append({"title": title, "sub": sub, "src": pil_to_data_url(img)})
+    return items
+
+
 def parf_render_output_step():
-    st.markdown('<p class="parf-oneliner"><b>Output.</b> The restored result.</p>', unsafe_allow_html=True)
-    st.info("Output becomes available after inference runs (next step of the redesign).")
+    image = st.session_state.get("confirmed_input_image")
+    mask = st.session_state.get("confirmed_binary_mask")
+    final = st.session_state.get("final_output_result")
+
+    st.markdown('<div class="parf-output">', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="parf-oneliner"><b>Output.</b> The restored result. '
+        'Compare it against other inferences or the original.</p>',
+        unsafe_allow_html=True,
+    )
+
+    head_col, zoom_col = st.columns([0.7, 0.3], vertical_alignment="center")
+    head_col.markdown('<p class="parf-eyebrow">Result</p>', unsafe_allow_html=True)
+    if zoom_col.button("🔍 Zoom", use_container_width=True, key="parf_zoom_single", disabled=final is None):
+        parf_open_lightbox("single")
+
+    if final is None:
+        st.info("Run inference on the Input step to produce the restored result.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    st.image(final.image, use_container_width=True)
+    st.caption("Result persists across the session. Zoom opens a synced view (scroll to zoom, drag to pan).")
+
+    if st.session_state.get("parf_lb_open"):
+        if st.button("✕ Close zoom", key="parf_lb_close"):
+            parf_close_lightbox()
+            st.rerun()
+        parf_render_lightbox(parf_lightbox_items(image, mask))
+
+    with st.expander("Advanced — compare"):
+        st.caption(
+            "Pick what to compare the output against — another inference, or the original "
+            "image — then open the compare view."
+        )
+        for k in REFERENCE_KEYS:
+            st.checkbox(COMPARE_LABELS[k][0], key=f"parf_cmp_{k}", on_change=parf_sync_removed, args=(k,))
+        if st.button("Compare →", type="primary", key="parf_compare_open_btn"):
+            st.session_state["parf_compare_open"] = True
+            st.rerun()
+
+    if st.session_state.get("parf_compare_open"):
+        parf_render_compare_section(image, mask)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def main():
