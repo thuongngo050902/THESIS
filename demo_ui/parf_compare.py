@@ -13,7 +13,7 @@ display order (shared by the grid and the zoom lightbox); ``removed`` is the set
 references hidden from the current comparison via a chip's x button.
 """
 
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 OUTPUT_KEY = "output"
 REFERENCE_KEYS: Tuple[str, ...] = ("masked", "mat", "coarse", "origin")
@@ -34,14 +34,21 @@ def selected_keys(cmp: Dict[str, bool]) -> List[str]:
     return [k for k in REFERENCE_KEYS if cmp.get(k)]
 
 
-def compare_items(cmp: Dict[str, bool], order: Iterable[str], removed: Iterable[str]) -> List[str]:
+def compare_items(
+    cmp: Dict[str, bool],
+    order: Iterable[str],
+    removed: Optional[Iterable[str]] = None,
+) -> List[str]:
     """The keys to show in the compare view.
 
     Rules:
-    - ``output`` is always present (it is never removable).
+    - ``output`` is always present (never removable). It is reorderable like any
+      other item, so it sits at whatever position ``order`` gives it; if ``order``
+      omits it entirely, it defaults to the front.
     - A reference is included iff its checkbox is on AND it is not in ``removed``.
-    - Items follow ``order``; any allowed key missing from ``order`` is appended in
-      canonical (ALL_KEYS) order so newly-checked references show up predictably.
+    - Items follow ``order`` (duplicates collapsed); any allowed reference missing
+      from ``order`` is appended in canonical (REFERENCE_KEYS) order so newly-checked
+      references show up predictably.
     """
     removed_set = set(removed or ())
     allowed = {OUTPUT_KEY}
@@ -49,8 +56,11 @@ def compare_items(cmp: Dict[str, bool], order: Iterable[str], removed: Iterable[
         if cmp.get(k) and k not in removed_set:
             allowed.add(k)
 
-    result = [k for k in order if k in allowed]
-    for k in ALL_KEYS:
+    result: List[str] = []
+    for k in order:
+        if k in allowed and k not in result:
+            result.append(k)
+    for k in REFERENCE_KEYS:
         if k in allowed and k not in result:
             result.append(k)
     if OUTPUT_KEY not in result:

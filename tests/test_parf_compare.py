@@ -39,6 +39,7 @@ def test_unchecked_reference_excluded():
 def test_removed_reference_excluded():
     items = compare_items(ALL_ON, list(ALL_KEYS), {"mat"})
     assert "mat" not in items and items[0] == "output"
+    assert set(items) == set(ALL_KEYS) - {"mat"}  # the other three remain
 
 
 def test_output_never_removed():
@@ -93,6 +94,30 @@ def test_selected_keys_canonical_order():
 def test_labels_cover_all_keys():
     for k in ALL_KEYS:
         assert k in COMPARE_LABELS and len(COMPARE_LABELS[k]) == 2
+
+
+def test_output_present_even_when_order_omits_it():
+    items = compare_items(ALL_ON, ["masked", "mat"], set())
+    assert OUTPUT_KEY in items
+    assert items[0] == OUTPUT_KEY  # defaults to the front when order omits it
+    assert set(items) == set(ALL_KEYS)
+
+
+def test_empty_order_falls_back_to_canonical():
+    items = compare_items(ALL_ON, [], set())
+    assert items[0] == OUTPUT_KEY
+    assert set(items) == set(ALL_KEYS)
+
+
+def test_duplicate_order_keys_deduped():
+    items = compare_items(ALL_ON, ["output", "masked", "output", "mat"], set())
+    assert items.count("output") == 1
+    assert items.count("masked") == 1
+
+
+def test_selected_keys_empty():
+    assert selected_keys({}) == []
+    assert selected_keys({k: False for k in REFERENCE_KEYS}) == []
 
 
 def _run():
