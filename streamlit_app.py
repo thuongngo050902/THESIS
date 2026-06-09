@@ -144,6 +144,80 @@ PARF_MASK_SCALE_MAX = 1.00
 PARF_MASK_SCALE_STEP = 0.05
 PARF_NUDGE_CLAMP = (0.12, 0.88)  # mark center stays within 12%-88% of the image bounds
 
+PARF_LIGHTBOX_TEMPLATE = """<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+  .lb-overlay { background:#0b0f14; color:#e5e7eb; min-height:600px; position:relative; overflow:hidden; }
+  .lb-bar { display:flex; align-items:center; gap:.7rem; padding:.55rem .9rem; background:#0b0f14;
+            border-bottom:1px solid #1f2933; position:absolute; inset:0 0 auto 0; z-index:5; }
+  .lb-bar strong { font-size:.95rem; }
+  .lb-bar .hint { color:#9aa5b1; font-size:.78rem; margin-left:auto; }
+  .lb-bar button { background:#1f2933; color:#e5e7eb; border:1px solid #334155; border-radius:8px;
+                   padding:.35rem .7rem; cursor:pointer; font-size:.82rem; }
+  .lb-stage { position:absolute; inset:46px 0 0 0; overflow:hidden; cursor:grab; }
+  .lb-stage.grabbing { cursor:grabbing; }
+  .lb-track { transform-origin:0 0; will-change:transform; padding:1.2rem; display:flex; gap:1.2rem; }
+  .lb-track.grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lb-card { margin:0; background:#111827; border:1px solid #1f2933; border-radius:12px;
+             padding:.6rem; position:relative; }
+  .lb-card img { display:block; width:340px; max-width:46vw; height:auto; border-radius:8px; user-select:none; }
+  .lb-track.grid img { width:100%; max-width:none; }
+  figcaption { margin-top:.4rem; font-size:.85rem; font-weight:600; }
+  figcaption span { display:block; font-weight:400; color:#9aa5b1; font-size:.74rem; }
+  .lb-reorder { position:absolute; top:.6rem; right:.6rem; display:flex; gap:.3rem; z-index:3; }
+  .lb-btn { background:rgba(31,41,51,.85); color:#e5e7eb; border:1px solid #334155; border-radius:6px;
+            cursor:pointer; padding:.1rem .45rem; }
+  #toggle { display: __TOGGLE_DISPLAY__; }
+</style></head><body>
+  <div class="lb-overlay">
+    <div class="lb-bar">
+      <strong>Zoom</strong>
+      <button id="toggle">Row / Grid</button>
+      <button id="reset">Reset view</button>
+      <span class="hint">scroll = zoom &middot; drag = pan &middot; &#9664;&#9654; reorder &middot; Esc closes</span>
+    </div>
+    <div class="lb-stage" id="stage"><div class="lb-track" id="track">__CARDS__</div></div>
+  </div>
+  <script>
+    var stage = document.getElementById('stage');
+    var track = document.getElementById('track');
+    var scale = 1.0, panX = 0, panY = 0, dragging = false, sx = 0, sy = 0;
+    function apply() { track.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')'; }
+    apply();
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      scale = Math.min(6, Math.max(0.4, scale * f));
+      apply();
+    }, { passive: false });
+    stage.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('button')) return;   // never start a pan from a button
+      dragging = true; sx = e.clientX - panX; sy = e.clientY - panY; stage.classList.add('grabbing');
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (!dragging) return; panX = e.clientX - sx; panY = e.clientY - sy; apply();
+    });
+    window.addEventListener('pointerup', function () { dragging = false; stage.classList.remove('grabbing'); });
+    document.getElementById('reset').onclick = function () { scale = 1.0; panX = 0; panY = 0; apply(); };
+    var toggle = document.getElementById('toggle');
+    if (toggle) toggle.onclick = function () { track.classList.toggle('grid'); };
+    var btns = track.querySelectorAll('.lb-btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].onclick = function (e) {
+        e.stopPropagation();
+        var card = e.target.closest('.lb-card');
+        var dir = parseInt(e.target.getAttribute('data-move'), 10);
+        if (dir < 0 && card.previousElementSibling) track.insertBefore(card, card.previousElementSibling);
+        if (dir > 0 && card.nextElementSibling) track.insertBefore(card.nextElementSibling, card);
+      };
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { document.querySelector('.lb-overlay').style.display = 'none'; }
+    });
+  </script>
+</body></html>"""
+
 
 @dataclass
 class StageArtifact:
@@ -1650,6 +1724,30 @@ def parf_render_compare_section(image, mask):
         for col, key in zip(grid_cols, row_keys):
             with col:
                 parf_render_compare_card(key, items, image, mask)
+
+
+def parf_render_lightbox(items: list):
+    """Render the synced zoom/pan lightbox stage from [{title, sub, src}] items."""
+    if not items:
+        st.info("Nothing to zoom yet.")
+        return
+    cards = "".join(
+        '<figure class="lb-card">'
+        '<div class="lb-reorder">'
+        '<button class="lb-btn" data-move="-1">&#9664;</button>'
+        '<button class="lb-btn" data-move="1">&#9654;</button>'
+        '</div>'
+        '<img draggable="false" src="' + it["src"] + '" alt="' + it["title"] + '">'
+        '<figcaption>' + it["title"] + '<span>' + it["sub"] + '</span></figcaption>'
+        '</figure>'
+        for it in items
+    )
+    html = (
+        PARF_LIGHTBOX_TEMPLATE
+        .replace("__CARDS__", cards)
+        .replace("__TOGGLE_DISPLAY__", "inline-flex" if len(items) >= 3 else "none")
+    )
+    components.html(html, height=640, scrolling=False)
 
 
 def parf_render_output_step():
