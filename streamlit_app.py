@@ -1439,6 +1439,60 @@ def parf_render_create_input():
         parf_render_create_preview(image, mask)
 
 
+def parf_ensure_output(image: Optional[PIL.Image.Image], mask: Optional[PIL.Image.Image]) -> Optional[StageArtifact]:
+    """Produce (and cache) the final restored Output for the confirmed package.
+
+    Honors the selected backend mode and stores the artifact in
+    ``final_output_result`` (the value the step bar uses to unlock Output).
+    """
+    if image is None or mask is None:
+        return None
+
+    if st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value:
+        endpoint = st.session_state.get("remote_endpoint", "").strip()
+        if not endpoint:
+            raise ValueError("A remote endpoint is required for remote inference.")
+        cache = st.session_state.setdefault("final_output_remote_cache", {})
+        cache_key = ("remote", endpoint, "final", image_signature(image), mask_signature(mask))
+        if cache_key not in cache:
+            remote_result = run_remote_inference(
+                image=image,
+                mask_image=mask,
+                preset=build_preset_from_state(),
+                checkpoint="final",
+            )
+            cache[cache_key] = StageArtifact(
+                image=remote_result.final_image,
+                notes=remote_result.pipeline_notes.get("final", "Remote final restoration result."),
+            )
+        st.session_state["final_output_result"] = cache[cache_key]
+        return cache[cache_key]
+
+    # Local backend: ensure_final_output_result handles checkpoint path + caching.
+    return ensure_final_output_result(image, mask)
+
+
+def parf_run_inference():
+    image = st.session_state.get("confirmed_input_image")
+    mask = st.session_state.get("confirmed_binary_mask")
+    if image is None or mask is None:
+        st.error("Confirm an input package before running inference.")
+        return
+    try:
+        with st.status("Running reconstruction…", expanded=False):
+            artifact = parf_ensure_output(image, mask)
+    except Exception as exc:  # noqa: BLE001 - surface any backend error to the user
+        st.session_state["final_output_result"] = None
+        st.error(f"Inference failed: {exc}")
+        return
+    if artifact is None:
+        st.error("Inference did not return a result. Check the backend settings in Advanced.")
+        return
+    st.success("Reconstruction complete — opening Output.")
+    st.session_state["parf_step"] = "output"
+    st.rerun()
+
+
 def parf_render_input_step():
     st.markdown(
         '<p class="parf-oneliner"><b>Input.</b> The confirmed input package — a binary mask and the '
@@ -1447,17 +1501,32 @@ def parf_render_input_step():
     )
     action_col, package_col = st.columns([0.4, 0.6], gap="large")
     with action_col:
-        st.button(
-            "Run inference",
-            type="primary",
-            use_container_width=True,
-            disabled=True,
-            help="Inference wiring is implemented in the next step of the redesign.",
-        )
-        st.caption("Step 1 (Create Input) is complete. Inference for Step 2 lands next.")
+        if st.button("Run inference", type="primary", use_container_width=True, key="parf_run"):
+            parf_run_inference()
         if st.button("← Back to Create Input", use_container_width=True, key="parf_back_to_create"):
             st.session_state["parf_step"] = "create"
             st.rerun()
+        with st.expander("Advanced — backend"):
+            st.selectbox(
+                "Backend mode",
+                options=[InferenceBackendMode.REMOTE.value, InferenceBackendMode.LOCAL.value],
+                key="backend_mode",
+            )
+            st.text_input(
+                "Remote endpoint",
+                key="remote_endpoint",
+                help="Base ngrok URL or full /infer URL used in remote mode.",
+            )
+            remote_selected = st.session_state["backend_mode"] == InferenceBackendMode.REMOTE.value
+            st.text_input("Stage 1 checkpoint", key="stage1_checkpoint", disabled=remote_selected)
+            st.text_input("Final checkpoint", key="final_checkpoint", disabled=remote_selected)
+            st.text_input("MAT baseline checkpoint", key="mat_original_checkpoint", disabled=remote_selected)
+            st.selectbox(
+                "Device",
+                options=["cuda", "cpu"],
+                key="device_name",
+                disabled=not torch.cuda.is_available(),
+            )
     with package_col:
         st.markdown('<p class="parf-eyebrow">Input package</p>', unsafe_allow_html=True)
         cols = st.columns(2, gap="medium")
