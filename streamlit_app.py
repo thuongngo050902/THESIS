@@ -279,7 +279,6 @@ def init_session_state():
         "parf_order": list(ALL_KEYS),
         "parf_removed": set(),
         "parf_lb_open": False,
-        "parf_lb_layout": "row",
         "parf_lb_scope": "single",
     }
     for key, value in defaults.items():
@@ -350,6 +349,10 @@ def invalidate_confirmation_and_results(reset_stage: Optional[str] = None):
     st.session_state["mat_original_result"] = None
     if reset_stage is not None:
         st.session_state["selected_stage"] = reset_stage
+    st.session_state["parf_compare_open"] = False
+    st.session_state["parf_lb_open"] = False
+    st.session_state["parf_order"] = list(ALL_KEYS)
+    st.session_state["parf_removed"] = set()
 
 
 def open_compare_view():
@@ -1678,7 +1681,8 @@ def parf_render_compare_card(key: str, items: list, image, mask):
     """Render one comparison card: image + title/sub-label + reorder buttons."""
     title, sub = COMPARE_LABELS[key]
     try:
-        img = parf_compare_image(key, image, mask)
+        with st.spinner(f"Loading {title}…"):
+            img = parf_compare_image(key, image, mask)
     except Exception as exc:  # noqa: BLE001 - per-tile failure, surfaced inline
         img = None
         st.warning(f"{title} unavailable: {exc}")
@@ -1699,10 +1703,13 @@ def parf_render_compare_section(image, mask):
     items = compare_items(cmp, st.session_state["parf_order"], st.session_state["parf_removed"])
     st.session_state["parf_order"] = items  # normalize stored order to the visible list
 
-    head_col, zoom_col = st.columns([0.7, 0.3], vertical_alignment="center")
+    head_col, zoom_col, close_col = st.columns([0.5, 0.3, 0.2], vertical_alignment="center")
     head_col.markdown('<p class="parf-eyebrow">Compare</p>', unsafe_allow_html=True)
     if zoom_col.button("🔍 Zoom all (synced)", use_container_width=True, key="parf_zoom_all"):
         parf_open_lightbox("all")
+    if close_col.button("✕ Close", use_container_width=True, key="parf_compare_close"):
+        st.session_state["parf_compare_open"] = False
+        st.rerun()
     st.caption(
         "Reorder with ◀ ▶ or remove with ✕ to focus the comparison. "
         "Zoom-all opens a synced view you can lay out as a row or grid."
