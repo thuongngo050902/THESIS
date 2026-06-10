@@ -111,7 +111,7 @@ MAT_BASELINE_REMOTE_CHECKPOINT = "mat_baseline"
 # COLAB_API_WITH_NGROK) to point at a remote/ngrok server.
 DEFAULT_INFERENCE_ENDPOINT = os.environ.get(
     "INFERENCE_API_URL",
-    os.environ.get("COLAB_API_WITH_NGROK", "http://127.0.0.1:8000"),
+    "http://127.0.0.1:8000",
 )
 
 
