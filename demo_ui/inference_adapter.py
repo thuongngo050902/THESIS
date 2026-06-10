@@ -147,6 +147,13 @@ def run_generator_on_inputs(
         )
     return output_tensor_to_pil(output)
 
+try:
+    _resampling_lanczos = PIL.Image.Resampling.LANCZOS
+    _resampling_nearest = PIL.Image.Resampling.NEAREST
+except AttributeError:
+    _resampling_lanczos = PIL.Image.LANCZOS
+    _resampling_nearest = PIL.Image.NEAREST
+
 
 def run_local_inference(
     image: PIL.Image.Image,
@@ -158,8 +165,17 @@ def run_local_inference(
         raise ValueError("A final checkpoint path is required for local inference.")
 
     device = torch.device(device_name or ("cuda" if torch.cuda.is_available() else "cpu"))
-    input_image = ensure_rgb(image)
-    binary_mask = ensure_binary_mask(mask_image, input_image.size)
+    orig_size = image.size
+    need_resize = (orig_size != (512, 512))
+
+    if need_resize:
+        input_image = ensure_rgb(image).resize((512, 512), _resampling_lanczos)
+        temp_mask = ensure_binary_mask(mask_image, orig_size)
+        binary_mask = temp_mask.resize((512, 512), _resampling_nearest)
+    else:
+        input_image = ensure_rgb(image)
+        binary_mask = ensure_binary_mask(mask_image, input_image.size)
+
     masked_input_image = apply_mask_preview(input_image, binary_mask)
 
     stage1_checkpoint = preset.stage1_checkpoint or preset.final_checkpoint
@@ -167,6 +183,28 @@ def run_local_inference(
     final_image = run_generator_on_inputs(preset.final_checkpoint, input_image, binary_mask, device)
 
     stage1_note = "Uses the Stage 1 checkpoint path." if preset.stage1_checkpoint else "Uses the final checkpoint as a fallback Stage 1 preview."
+
+    if need_resize:
+        orig_input_image = ensure_rgb(image)
+        orig_binary_mask = ensure_binary_mask(mask_image, orig_size)
+        orig_masked_preview = apply_mask_preview(orig_input_image, orig_binary_mask)
+
+        resized_stage1 = stage1_image.resize(orig_size, _resampling_lanczos)
+        resized_final = final_image.resize(orig_size, _resampling_lanczos)
+
+        return InferenceResult(
+            input_image=orig_input_image,
+            binary_mask=orig_binary_mask,
+            masked_input_image=orig_masked_preview,
+            stage1_image=resized_stage1,
+            final_image=resized_final,
+            pipeline_notes={
+                "backend": f"Local inference on {device.type}",
+                "stage1": stage1_note,
+                "final": "Uses the final checkpoint for the completed restoration result.",
+                "resizing": f"Automatically resized from original size {orig_size} to 512x512 for inference, then resized back.",
+            },
+        )
 
     return InferenceResult(
         input_image=input_image,
@@ -192,8 +230,17 @@ def run_remote_inference(
     if not preset.remote_endpoint:
         raise ValueError("A remote endpoint is required for remote inference.")
 
-    input_image = ensure_rgb(image)
-    binary_mask = ensure_binary_mask(mask_image, input_image.size)
+    orig_size = image.size
+    need_resize = (orig_size != (512, 512))
+
+    if need_resize:
+        input_image = ensure_rgb(image).resize((512, 512), _resampling_lanczos)
+        temp_mask = ensure_binary_mask(mask_image, orig_size)
+        binary_mask = temp_mask.resize((512, 512), _resampling_nearest)
+    else:
+        input_image = ensure_rgb(image)
+        binary_mask = ensure_binary_mask(mask_image, input_image.size)
+
     masked_input_image = apply_mask_preview(input_image, binary_mask)
 
     image_buffer = pil_to_png_buffer(input_image)
@@ -215,6 +262,30 @@ def run_remote_inference(
     payload = response.json()
     final_image = base64_to_pil(payload["final_image_base64"])
 
+    if need_resize:
+        orig_input_image = ensure_rgb(image)
+        orig_binary_mask = ensure_binary_mask(mask_image, orig_size)
+        orig_masked_preview = apply_mask_preview(orig_input_image, orig_binary_mask)
+
+        resized_final = final_image.resize(orig_size, _resampling_lanczos)
+        if checkpoint == "stage1":
+            resized_stage1 = final_image.resize(orig_size, _resampling_lanczos)
+        else:
+            resized_stage1 = orig_masked_preview
+
+        notes = payload.get("pipeline_notes", {})
+        notes = dict(notes) if isinstance(notes, dict) else {}
+        notes["resizing"] = f"Automatically resized from original size {orig_size} to 512x512 for inference, then resized back."
+
+        return InferenceResult(
+            input_image=orig_input_image,
+            binary_mask=orig_binary_mask,
+            masked_input_image=orig_masked_preview,
+            stage1_image=resized_stage1,
+            final_image=resized_final,
+            pipeline_notes=notes,
+        )
+
     return InferenceResult(
         input_image=input_image,
         binary_mask=binary_mask,
@@ -230,6 +301,7 @@ def run_remote_inference(
             },
         ),
     )
+
 
 
 def run_inference(

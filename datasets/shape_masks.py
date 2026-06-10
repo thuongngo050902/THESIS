@@ -182,12 +182,32 @@ def _select_random_pattern(size, hole_range, seed, max_tries: int = 64) -> np.nd
 
 
 def focused_random_mask(size, target_center, hole_range, seed, max_tries: int = 64) -> np.ndarray:
-    """MAT face-focused random mask: select a position-independent pattern, then translate it.
+    """MAT face-focused random mask: generate a candidate RandomMask, shift it, and check its ratio.
 
-    The pattern is chosen by its centered hole-ratio (depends only on seed + hole_range), then
-    shifted to ``target_center``. Moving the target therefore TRANSLATES the same pattern instead
-    of regenerating a new one. Returns ``(size, size)`` float32 (1=keep, 0=hole).
+    This implements the dataset generator's search-after-shift algorithm. It guarantees that the
+    hole ratio is within the desired range even after clipping near image boundaries.
     """
-    pattern = _select_random_pattern(size, hole_range, seed, max_tries)
+    size = int(size)
     target_cy, target_cx = target_center
-    return _centered_shift(pattern, int(target_cy), int(target_cx))
+    lo, hi = hole_range
+    target = 0.5 * (lo + hi)
+    best_mask = None
+    best_dist = float("inf")
+
+    for attempt in range(max_tries):
+        np.random.seed(int(seed) + attempt)
+        candidate = RandomMask(size, hole_range=[0, 1])[0].astype(np.float32)
+        shifted = _centered_shift(candidate, int(target_cy), int(target_cx))
+        ratio = float((shifted == 0).mean())
+        if lo <= ratio <= hi:
+            return shifted
+
+        dist = abs(ratio - target)
+        if dist < best_dist:
+            best_dist = dist
+            best_mask = shifted
+
+    if best_mask is None:
+        best_mask = np.ones((size, size), dtype=np.float32)
+
+    return best_mask

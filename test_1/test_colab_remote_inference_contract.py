@@ -136,6 +136,44 @@ class ColabRemoteInferenceContractTest(unittest.TestCase):
         remote.assert_called_once()
         self.assertEqual(remote.call_args.kwargs["checkpoint"], "final")
 
+    def test_remote_inference_automatically_resizes_non_512_inputs_and_outputs(self):
+        # Input image is 952x952 (non-512x512)
+        non_512_input = PIL.Image.new("RGB", (952, 952), (10, 20, 30))
+        non_512_mask = PIL.Image.new("L", (952, 952), 255)
+        
+        # Mock server returns a 512x512 output (since the model always outputs 512x512)
+        server_output = PIL.Image.new("RGB", (512, 512), (90, 80, 70))
+        
+        preset = CheckpointPreset(
+            name="Colab",
+            final_checkpoint="final",
+            remote_endpoint="https://example.ngrok-free.dev",
+        )
+        
+        with patch("demo_ui.inference_adapter.requests.post") as post:
+            post.return_value = FakeResponse({"final_image_base64": pil_to_base64(server_output)})
+            
+            result = run_remote_inference(
+                image=non_512_input,
+                mask_image=non_512_mask,
+                preset=preset,
+                checkpoint="final",
+            )
+            
+        # Verify it got resized back to 952x952
+        self.assertEqual(result.final_image.size, (952, 952))
+        self.assertEqual(result.input_image.size, (952, 952))
+        self.assertEqual(result.binary_mask.size, (952, 952))
+        self.assertEqual(result.masked_input_image.size, (952, 952))
+        
+        # Verify that requests.post was called with 512x512 images
+        post.assert_called_once()
+        args, kwargs = post.call_args
+        # Extract the sent image from kwargs
+        image_data = kwargs["files"]["image"][1].getvalue()
+        sent_image = PIL.Image.open(io.BytesIO(image_data))
+        self.assertEqual(sent_image.size, (512, 512))
+
 
 if __name__ == "__main__":
     unittest.main()
