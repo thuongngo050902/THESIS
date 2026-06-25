@@ -10,7 +10,6 @@ import os
 import glob
 import torch
 import torch.utils.cpp_extension
-import importlib
 import hashlib
 import shutil
 from pathlib import Path
@@ -104,11 +103,10 @@ def get_plugin(module_name, sources, **build_kwargs):
                     # wait until done and continue.
                     baton.wait()
             digest_sources = [os.path.join(digest_build_dir, os.path.basename(x)) for x in sources]
-            torch.utils.cpp_extension.load(name=module_name, build_directory=build_dir,
+            module = torch.utils.cpp_extension.load(name=module_name, build_directory=build_dir,
                 verbose=verbose_build, sources=digest_sources, **build_kwargs)
         else:
-            torch.utils.cpp_extension.load(name=module_name, verbose=verbose_build, sources=sources, **build_kwargs)
-        module = importlib.import_module(module_name)
+            module = torch.utils.cpp_extension.load(name=module_name, verbose=verbose_build, sources=sources, **build_kwargs)
 
     except:
         if verbosity == 'brief':

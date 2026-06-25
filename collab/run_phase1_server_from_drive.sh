@@ -24,12 +24,22 @@ WORKERS="${WORKERS:-2}"
 SNAP="${SNAP:-5}"
 
 activate_venv() {
-    if [ ! -f "$VENV_PATH/bin/activate" ]; then
-        echo "Missing virtualenv activate script: $VENV_PATH/bin/activate"
-        exit 1
+    if [ -f "$VENV_PATH/bin/activate" ]; then
+        # shellcheck disable=SC1090
+        source "$VENV_PATH/bin/activate"
+        return
     fi
-    # shellcheck disable=SC1090
-    source "$VENV_PATH/bin/activate"
+
+    # Support conda env paths that may not ship a standalone activate script.
+    if [ -x "$VENV_PATH/bin/python" ]; then
+        export PATH="$VENV_PATH/bin:$PATH"
+        export VIRTUAL_ENV="$VENV_PATH"
+        return
+    fi
+
+    echo "Missing environment at: $VENV_PATH"
+    echo "Expected either $VENV_PATH/bin/activate or $VENV_PATH/bin/python"
+    exit 1
 }
 
 install_runtime_tools() {

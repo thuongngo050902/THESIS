@@ -1,0 +1,11 @@
+﻿experiment_name: faceart_phase_comparison
+output_root: results
+gt_dir: ../test_sets/CelebA-HQ/images
+masked_input_dir: null
+enable_arcface: false
+qualitative_count: 4
+results:
+  mat_original: path/to/mat_original
+  finetune_plus_loss: path/to/finetune_plus_loss
+  architecture_phase1: path/to/architecture_phase1
+  architecture_phase2: path/to/architecture_phase2

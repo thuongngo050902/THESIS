@@ -40,6 +40,18 @@ class MatTransformerArchitectureContractTest(unittest.TestCase):
         text = self.read_text()
         self.assertNotIn("F.dropout(mul_map, training=True)", text)
 
+    def test_transformer_residual_adapter_is_declared(self):
+        text = self.read_text()
+        self.assertIn("class TransformerResidualAdapter", text)
+        self.assertIn("self.tran_adapter", text)
+        self.assertIn("self.adapter_alpha", text)
+
+    def test_phase2_adapter_flags_reach_transformer_layers(self):
+        text = self.read_text()
+        self.assertIn("enable_tran_adapter_32", text)
+        self.assertIn("enable_tran_adapter_16", text)
+        self.assertIn("input_resolution", text)
+
 
 if __name__ == "__main__":
     unittest.main()
