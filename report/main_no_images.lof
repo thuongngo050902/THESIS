@@ -1,0 +1,37 @@
+\babel@toc {english}{}\relax 
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Examples of damaged artworks and corresponding digital restoration results produced by an image inpainting framework.}}{10}{}%
+\contentsline {figure}{\numberline {1.2}{\ignorespaces Taxonomy of common damage types in artworks and artistic images.}}{10}{}%
+\contentsline {figure}{\numberline {1.3}{\ignorespaces Illustration of the structure--texture trade-off in artwork inpainting.}}{11}{}%
+\contentsline {figure}{\numberline {1.4}{\ignorespaces Illustrative comparison of artwork restoration approaches}}{11}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces Illustration of exemplar-based image inpainting. \textit {Adapted from}~\cite {criminisi2004exemplar}.}}{16}{}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Architecture of the Context Encoder framework. \textit {Adapted from}~\cite {pathak2016context}.}}{17}{}%
+\contentsline {figure}{\numberline {2.3}{\ignorespaces Global--local adversarial inpainting framework. \textit {Adapted from}~\cite {iizuka2017global}.}}{17}{}%
+\contentsline {figure}{\numberline {2.4}{\ignorespaces Contextual attention framework for image inpainting. \textit {Adapted from}~\cite {yu2018contextual}.}}{17}{}%
+\contentsline {figure}{\numberline {2.5}{\ignorespaces Partial convolution operation with dynamic mask updating. \textit {Adapted from}~\cite {liu2018partial}.}}{18}{}%
+\contentsline {figure}{\numberline {2.6}{\ignorespaces Two-stage structure-guided inpainting of EdgeConnect. \textit {Adapted from}~\cite {nazeri2019edgeconnect}.}}{18}{}%
+\contentsline {figure}{\numberline {2.7}{\ignorespaces Deep Image Prior for image inpainting. \textit {Adapted from}~\cite {ulyanov2018dip}.}}{18}{}%
+\contentsline {figure}{\numberline {2.8}{\ignorespaces ZITS framework for zero-shot image inpainting. \textit {Adapted from}~\cite {zeng2022zits}.}}{19}{}%
+\contentsline {figure}{\numberline {2.9}{\ignorespaces ZITS++ enhanced transformer reasoning for inpainting. \textit {Adapted from}~\cite {zeng2023zitspp}.}}{19}{}%
+\contentsline {figure}{\numberline {2.10}{\ignorespaces Mask-Aware Transformer (MAT) architecture for large-hole inpainting. \textit {Adapted from}~\cite {li2022mat}.}}{20}{}%
+\contentsline {figure}{\numberline {2.11}{\ignorespaces RePaint: diffusion-based inpainting via conditional denoising. \textit {Adapted from}~\cite {lugmayr2022repaint}.}}{20}{}%
+\contentsline {figure}{\numberline {2.12}{\ignorespaces Latent diffusion framework for high-resolution image synthesis and inpainting. \textit {Adapted from}~\cite {rombach2022ldm}.}}{21}{}%
+\contentsline {figure}{\numberline {2.13}{\ignorespaces BrushNet: decomposed dual-branch diffusion with masked-image feature injection. \textit {Adapted from}~\cite {ju2024brushnet}.}}{21}{}%
+\contentsline {figure}{\numberline {2.14}{\ignorespaces RAD: region-aware diffusion with simplified reverse scheduling for image inpainting. \textit {Adapted from}~\cite {kim2025rad}.}}{22}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Overall architecture of PARF for portrait artwork reconstruction.}}{27}{}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Illustration of the Stage~1 coarse restoration process.}}{30}{}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Structure of the transformer stage used in PARF.}}{32}{}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Illustration of the dynamic mask updating strategy during transformer reasoning.}}{33}{}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Style-code generation path for the Style Manipulation Module in PARF.}}{34}{}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Illustration of the Stage~2 refinement process in PARF.}}{36}{}%
+\contentsline {figure}{\numberline {3.7}{\ignorespaces Training objectives of PARF.}}{37}{}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Representative artwork samples prepared for experimental evaluation.}}{45}{}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Prepared damage masks and masked artwork inputs used in the experiments.}}{46}{}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Qualitative restoration results of PARF.}}{47}{}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces Qualitative comparison of PARF, MAT, and recent baselines.}}{51}{}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces Visual checkpoint-based ablation comparison of the selected thesis checkpoints.}}{53}{}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces Failure cases and remaining limitations of PARF.}}{54}{}%
+\addvspace {10\p@ }

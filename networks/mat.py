@@ -67,6 +67,21 @@ def window_reverse(windows, window_size, H, W):
     return x
 
 
+@misc.profiled_function
+def build_relative_position_index(window_size):
+    window_size = to_2tuple(window_size)
+    coords_h = torch.arange(window_size[0])
+    coords_w = torch.arange(window_size[1])
+    coords = torch.stack(torch.meshgrid(coords_h, coords_w))
+    coords_flatten = torch.flatten(coords, 1)
+    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+    relative_coords = relative_coords.permute(1, 2, 0).contiguous()
+    relative_coords[:, :, 0] += window_size[0] - 1
+    relative_coords[:, :, 1] += window_size[1] - 1
+    relative_coords[:, :, 0] *= 2 * window_size[1] - 1
+    return relative_coords.sum(-1)
+
+
 @persistence.persistent_class
 class Conv2dLayerPartial(nn.Module):
     def __init__(self,
@@ -108,6 +123,30 @@ class Conv2dLayerPartial(nn.Module):
 
 
 @persistence.persistent_class
+class DeterministicLatentGate(nn.Module):
+    def __init__(self, feature_dim, latent_dim=1, hidden_dim=None, activation='lrelu'):
+        super().__init__()
+        hidden_dim = hidden_dim or feature_dim
+        self.fc1 = FullyConnectedLayer(in_features=feature_dim + latent_dim, out_features=hidden_dim, activation=activation)
+        self.fc2 = FullyConnectedLayer(in_features=hidden_dim, out_features=1)
+        nn.init.zeros_(self.fc2.weight)
+        if self.fc2.bias is not None:
+            nn.init.zeros_(self.fc2.bias)
+
+    def forward(self, features, latent):
+        gate = torch.sigmoid(self.fc2(self.fc1(torch.cat([features, latent], dim=-1))))
+        mixed = features * gate + latent * (1 - gate)
+        return mixed, gate
+
+
+@misc.profiled_function
+def blend_with_latent_gate(features, latent, latent_gate=None):
+    if latent_gate is None:
+        return features * 0.5 + latent * 0.5, None
+    return latent_gate(features, latent)
+
+
+@persistence.persistent_class
 class WindowAttention(nn.Module):
     r""" Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
@@ -121,19 +160,26 @@ class WindowAttention(nn.Module):
         proj_drop (float, optional): Dropout ratio of output. Default: 0.0
     """
 
-    def __init__(self, dim, window_size, num_heads, down_ratio=1, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, window_size, num_heads, down_ratio=1, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,
+                 enable_rel_pos_bias=False, enable_mask_bias=False):
 
         super().__init__()
         self.dim = dim
         self.window_size = window_size  # Wh, Ww
         self.num_heads = num_heads
+        self.enable_rel_pos_bias = enable_rel_pos_bias
+        self.enable_mask_bias = enable_mask_bias
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
+        relative_bias_table_size = (2 * self.window_size[0] - 1) * (2 * self.window_size[1] - 1)
 
         self.q = FullyConnectedLayer(in_features=dim, out_features=dim)
         self.k = FullyConnectedLayer(in_features=dim, out_features=dim)
         self.v = FullyConnectedLayer(in_features=dim, out_features=dim)
         self.proj = FullyConnectedLayer(in_features=dim, out_features=dim)
+        self.relative_position_bias_table = nn.Parameter(torch.zeros(relative_bias_table_size, num_heads))
+        self.register_buffer("relative_position_index", build_relative_position_index(self.window_size))
+        self.mask_bias = nn.Parameter(torch.zeros(num_heads))
 
         self.softmax = nn.Softmax(dim=-1)
 
@@ -150,6 +196,10 @@ class WindowAttention(nn.Module):
         v = self.v(x).view(B_, -1, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
         attn = (q @ k) * self.scale
+        if self.enable_rel_pos_bias:
+            relative_position_bias = self.relative_position_bias_table[self.relative_position_index[:N, :N].reshape(-1)]
+            relative_position_bias = relative_position_bias.view(N, N, -1).permute(2, 0, 1).unsqueeze(0)
+            attn = attn + relative_position_bias.to(attn.dtype)
 
         if mask is not None:
             nW = mask.shape[0]
@@ -157,9 +207,16 @@ class WindowAttention(nn.Module):
             attn = attn.view(-1, self.num_heads, N, N)
 
         if mask_windows is not None:
-            attn_mask_windows = mask_windows.squeeze(-1).unsqueeze(1).unsqueeze(1)
-            attn = attn + attn_mask_windows.masked_fill(attn_mask_windows == 0, float(-100.0)).masked_fill(
-                attn_mask_windows == 1, float(0.0))
+            attn_mask_windows = mask_windows.squeeze(-1).to(attn.dtype)
+            key_bias = torch.where(
+                attn_mask_windows > 0,
+                torch.zeros_like(attn_mask_windows),
+                torch.full_like(attn_mask_windows, -100.0),
+            )
+            attn = attn + key_bias.unsqueeze(1).unsqueeze(2)
+            if self.enable_mask_bias:
+                pairwise_mask = torch.abs(attn_mask_windows.unsqueeze(2) - attn_mask_windows.unsqueeze(1))
+                attn = attn + pairwise_mask.unsqueeze(1) * self.mask_bias.view(1, self.num_heads, 1, 1).to(attn.dtype)
             with torch.no_grad():
                 mask_windows = torch.clamp(torch.sum(mask_windows, dim=1, keepdim=True), 0, 1).repeat(1, N, 1)
 
@@ -191,7 +248,7 @@ class SwinTransformerBlock(nn.Module):
 
     def __init__(self, dim, input_resolution, num_heads, down_ratio=1, window_size=7, shift_size=0,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, enable_rel_pos_bias=False, enable_mask_bias=False):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -209,7 +266,8 @@ class SwinTransformerBlock(nn.Module):
             down_ratio = 1
         self.attn = WindowAttention(dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
                                     down_ratio=down_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop,
-                                    proj_drop=drop)
+                                    proj_drop=drop, enable_rel_pos_bias=enable_rel_pos_bias,
+                                    enable_mask_bias=enable_mask_bias)
 
         self.fuse = FullyConnectedLayer(in_features=dim * 2, out_features=dim, activation='lrelu')
 
@@ -383,7 +441,8 @@ class BasicLayer(nn.Module):
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size, down_ratio=1,
                  mlp_ratio=2., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False):
+                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
+                 enable_rel_pos_bias=False, enable_mask_bias=False):
 
         super().__init__()
         self.dim = dim
@@ -407,7 +466,8 @@ class BasicLayer(nn.Module):
                                  qkv_bias=qkv_bias, qk_scale=qk_scale,
                                  drop=drop, attn_drop=attn_drop,
                                  drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                 norm_layer=norm_layer)
+                                 norm_layer=norm_layer, enable_rel_pos_bias=enable_rel_pos_bias,
+                                 enable_mask_bias=enable_mask_bias)
             for i in range(depth)])
 
         self.conv = Conv2dLayerPartial(in_channels=dim, out_channels=dim, kernel_size=3, activation='lrelu')
@@ -699,9 +759,12 @@ class DecStyleBlock(nn.Module):
 
 @persistence.persistent_class
 class FirstStage(nn.Module):
-    def __init__(self, img_channels, img_resolution=256, dim=180, w_dim=512, use_noise=False, demodulate=True, activation='lrelu'):
+    def __init__(self, img_channels, img_resolution=256, dim=180, w_dim=512, use_noise=False, demodulate=True,
+                 activation='lrelu', enable_rel_pos_bias=False, enable_mask_bias=False,
+                 enable_deterministic_latent_gate=False):
         super().__init__()
         res = 64
+        self.latent_gate = DeterministicLatentGate(feature_dim=dim, latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
 
         self.conv_first = Conv2dLayerPartial(in_channels=img_channels+1, out_channels=dim, kernel_size=3, activation=activation)
         self.enc_conv = nn.ModuleList()
@@ -731,7 +794,8 @@ class FirstStage(nn.Module):
             self.tran.append(
                 BasicLayer(dim=dim, input_resolution=[res, res], depth=depth, num_heads=num_heads,
                            window_size=window_sizes[i], drop_path=dpr[sum(depths[:i]):sum(depths[:i + 1])],
-                           downsample=merge)
+                           downsample=merge, enable_rel_pos_bias=enable_rel_pos_bias,
+                           enable_mask_bias=enable_mask_bias)
             )
 
         # global style
@@ -775,14 +839,12 @@ class FirstStage(nn.Module):
             else:
                 x, x_size, mask = block(x, x_size, None)
 
-                mul_map = torch.ones_like(x) * 0.5
-                mul_map = F.dropout(mul_map, training=True)
-                ws = self.ws_style(ws[:, -1])
-                add_n = self.to_square(ws).unsqueeze(1)
+                ws_style = self.ws_style(ws[:, -1])
+                add_n = self.to_square(ws_style).unsqueeze(1)
                 add_n = F.interpolate(add_n, size=x.size(1), mode='linear', align_corners=False).squeeze(1).unsqueeze(-1)
-                x = x * mul_map + add_n * (1 - mul_map)
+                x, _latent_gate = blend_with_latent_gate(x, add_n, self.latent_gate)
                 gs = self.to_style(self.down_conv(token2feature(x, x_size)).flatten(start_dim=1))
-                style = torch.cat([gs, ws], dim=1)
+                style = torch.cat([gs, ws_style], dim=1)
 
         x = token2feature(x, x_size).contiguous()
         img = None
@@ -808,6 +870,9 @@ class SynthesisNet(nn.Module):
                  drop_rate      = 0.5,
                  use_noise      = True,
                  demodulate     = True,
+                 enable_rel_pos_bias = False,
+                 enable_mask_bias = False,
+                 enable_deterministic_latent_gate = False,
                  ):
         super().__init__()
         resolution_log2 = int(np.log2(img_resolution))
@@ -818,7 +883,17 @@ class SynthesisNet(nn.Module):
         self.resolution_log2 = resolution_log2
 
         # first stage
-        self.first_stage = FirstStage(img_channels, img_resolution=img_resolution, w_dim=w_dim, use_noise=False, demodulate=demodulate)
+        self.first_stage = FirstStage(
+            img_channels,
+            img_resolution=img_resolution,
+            w_dim=w_dim,
+            use_noise=False,
+            demodulate=demodulate,
+            enable_rel_pos_bias=enable_rel_pos_bias,
+            enable_mask_bias=enable_mask_bias,
+            enable_deterministic_latent_gate=enable_deterministic_latent_gate,
+        )
+        self.latent_gate = DeterministicLatentGate(feature_dim=nf(4), latent_dim=1, activation=activation) if enable_deterministic_latent_gate else None
 
         # second stage
         self.enc = Encoder(resolution_log2, img_channels, activation, patch_size=5, channels=16)
@@ -836,11 +911,10 @@ class SynthesisNet(nn.Module):
         E_features = self.enc(x)
 
         fea_16 = E_features[4]
-        mul_map = torch.ones_like(fea_16) * 0.5
-        mul_map = F.dropout(mul_map, training=True)
         add_n = self.to_square(ws[:, 0]).view(-1, 16, 16).unsqueeze(1)
         add_n = F.interpolate(add_n, size=fea_16.size()[-2:], mode='bilinear', align_corners=False)
-        fea_16 = fea_16 * mul_map + add_n * (1 - mul_map)
+        fea_16_tokens, _latent_gate = blend_with_latent_gate(feature2token(fea_16), feature2token(add_n), self.latent_gate)
+        fea_16 = token2feature(fea_16_tokens, fea_16.size()[-2:])
         E_features[4] = fea_16
 
         # style

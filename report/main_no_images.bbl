@@ -1,0 +1,166 @@
+\begin{thebibliography}{10}
+
+\bibitem{criminisi2004exemplar}
+A.~Criminisi, P.~Perez, and K.~Toyama, ``Region filling and object removal by
+  exemplar-based image inpainting,'' {\em IEEE Transactions on Image
+  Processing}, vol.~13, no.~9, pp.~1200--1212, 2004.
+
+\bibitem{pathak2016context}
+D.~Pathak, P.~Kr{\"a}henb{\"u}hl, J.~Donahue, T.~Darrell, and A.~A. Efros,
+  ``Context encoders: Feature learning by inpainting,'' in {\em Proceedings of
+  the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pp.~2536--2544, 2016.
+
+\bibitem{iizuka2017global}
+S.~Iizuka, E.~Simo-Serra, and H.~Ishikawa, ``Globally and locally consistent
+  image completion,'' {\em ACM Transactions on Graphics}, vol.~36, no.~4, 2017.
+
+\bibitem{yu2018contextual}
+J.~Yu, Z.~Lin, J.~Yang, X.~Shen, X.~Lu, and T.~S. Huang, ``Generative image
+  inpainting with contextual attention,'' in {\em Proceedings of the IEEE
+  Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pp.~5505--5514, 2018.
+
+\bibitem{liu2018partial}
+G.~Liu, F.~A. Reda, K.~J. Shih, T.-C. Wang, A.~Tao, and B.~Catanzaro, ``Image
+  inpainting for irregular holes using partial convolutions,'' in {\em
+  Proceedings of the European Conference on Computer Vision (ECCV)},
+  pp.~85--100, Springer, 2018.
+
+\bibitem{nazeri2019edgeconnect}
+K.~Nazeri, E.~Ng, T.~Joseph, F.~Z. Qureshi, and M.~Ebrahimi, ``Edgeconnect:
+  Structure guided image inpainting using edge prediction,'' in {\em
+  Proceedings of the IEEE International Conference on Computer Vision Workshops
+  (ICCVW)}, 2019.
+
+\bibitem{ulyanov2018dip}
+D.~Ulyanov, A.~Vedaldi, and V.~Lempitsky, ``Deep image prior,'' in {\em
+  Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition
+  (CVPR)}, pp.~9446--9454, 2018.
+
+\bibitem{zeng2022zits}
+Y.~Zeng, J.~Fu, H.~Chao, and B.~Guo, ``Zits: Zero-shot image inpainting with
+  transformer,'' in {\em Proceedings of the IEEE/CVF Conference on Computer
+  Vision and Pattern Recognition (CVPR)}, pp.~16827--16836, 2022.
+
+\bibitem{zeng2023zitspp}
+Y.~Zeng, J.~Fu, H.~Chao, and B.~Guo, ``Zits++: Enhanced transformer reasoning
+  for zero-shot image inpainting,'' {\em arXiv preprint}, 2023.
+\newblock arXiv:2304.05953.
+
+\bibitem{li2022mat}
+C.~Li, W.~Wang, Y.~Zeng, and Z.~Tu, ``Mask-aware transformer for large hole
+  image inpainting,'' in {\em Proceedings of the IEEE/CVF Conference on
+  Computer Vision and Pattern Recognition (CVPR)}, pp.~18118--18127, 2022.
+
+\bibitem{lugmayr2022repaint}
+A.~Lugmayr, M.~Danelljan, L.~Van~Gool, and R.~Timofte, ``Repaint: Inpainting
+  using denoising diffusion probabilistic models,'' in {\em Proceedings of the
+  IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pp.~11461--11471, 2022.
+
+\bibitem{rombach2022ldm}
+R.~Rombach, A.~Blattmann, D.~Lorenz, P.~Esser, and B.~Ommer, ``High-resolution
+  image synthesis with latent diffusion models,'' in {\em Proceedings of the
+  IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pp.~10684--10695, 2022.
+
+\bibitem{ju2024brushnet}
+X.~Ju, X.~Liu, X.~Wang, Y.~Bian, Y.~Shan, and Q.~Xu, ``Brushnet: A
+  plug-and-play image inpainting model with decomposed dual-branch diffusion,''
+  in {\em Proceedings of the European Conference on Computer Vision (ECCV)},
+  2024.
+
+\bibitem{kim2025rad}
+S.~Kim, S.~Suh, and M.~Lee, ``Rad: Region-aware diffusion models for image
+  inpainting,'' {\em arXiv preprint}, 2025.
+\newblock arXiv:2412.09191.
+
+\bibitem{bertalmio2000inpainting}
+M.~Bertalmio, G.~Sapiro, V.~Caselles, and C.~Ballester, ``Image inpainting,''
+  in {\em Proceedings of the 27th Annual Conference on Computer Graphics and
+  Interactive Techniques (SIGGRAPH)}, pp.~417--424, ACM, 2000.
+
+\bibitem{barnes2009patchmatch}
+C.~Barnes, E.~Shechtman, A.~Finkelstein, and D.~Goldman, ``Patchmatch: A
+  randomized correspondence algorithm for structural image editing,'' {\em ACM
+  Transactions on Graphics}, vol.~28, no.~3, 2009.
+
+\bibitem{brushnetrepo}
+{Tencent ARC}, ``Brushnet official repository.''
+  \url{https://github.com/TencentARC/BrushNet}, 2024.
+\newblock Official implementation with released checkpoints and evaluation
+  resources.
+
+\bibitem{radrepo}
+S.~Kim and collaborators, ``Rad official repository.''
+  \url{https://github.com/srk1995/RAD}, 2025.
+\newblock Official implementation with public code and pretrained resources.
+
+\bibitem{openai_chatgpt_images}
+{OpenAI}, ``Creating images in chatgpt.''
+  \url{https://help.openai.com/en/articles/8932459-creating-images-in-chatgpt},
+  2026.
+\newblock Official OpenAI Help Center documentation for ChatGPT image
+  generation and image editing.
+
+\bibitem{openai_chatgpt_editing}
+{OpenAI}, ``Editing your images with chatgpt images.''
+  \url{https://help.openai.com/en/articles/9055440-editing-your-images-with-chatgpt-images},
+  2026.
+\newblock Official OpenAI Help Center documentation for region-based image
+  editing in ChatGPT.
+
+\bibitem{google_gemini_images}
+{Google}, ``Generate and edit images with gemini apps.''
+  \url{https://support.google.com/gemini/answer/14286560?hl=en}, 2026.
+\newblock Official Gemini Apps Help documentation for image generation and
+  editing.
+
+\bibitem{google_gemini_editing}
+{Google}, ``Upload and edit your images directly in the gemini app.''
+  \url{https://blog.google/products/gemini/image-editing/}, 2025.
+\newblock Official Google blog announcement of direct image editing in Gemini.
+
+\bibitem{houlsby2019parameter}
+N.~Houlsby, A.~Giurgiu, S.~Jastrzebski, B.~Morrone, Q.~de~Laroussilhe,
+  A.~Gesmundo, M.~Attariyan, and S.~Gelly, ``Parameter-efficient transfer
+  learning for nlp,'' in {\em International Conference on Machine Learning},
+  pp.~2790--2799, 2019.
+
+\bibitem{goodfellow2014gan}
+I.~Goodfellow, J.~Pouget-Abadie, M.~Mirza, B.~Xu, D.~Warde-Farley, S.~Ozair,
+  A.~Courville, and Y.~Bengio, ``Generative adversarial nets,'' in {\em
+  Advances in Neural Information Processing Systems (NeurIPS)}, vol.~27, 2014.
+
+\bibitem{johnson2016perceptual}
+J.~Johnson, A.~Alahi, and L.~Fei-Fei, ``Perceptual losses for real-time style
+  transfer and super-resolution,'' in {\em Proceedings of the European
+  Conference on Computer Vision (ECCV)}, pp.~694--711, 2016.
+
+\bibitem{jiang2021ffl}
+L.~Jiang, B.~Dai, W.~Wu, and C.~C. Loy, ``Focal frequency loss for image
+  reconstruction and synthesis,'' in {\em Proceedings of the IEEE/CVF
+  International Conference on Computer Vision (ICCV)}, pp.~13919--13929, 2021.
+
+\bibitem{mescheder2018training}
+L.~Mescheder, A.~Geiger, and S.~Nowozin, ``Which training methods for gans do
+  actually converge?,'' in {\em International Conference on Machine Learning},
+  pp.~3481--3490, 2018.
+
+\bibitem{simonyan2015vgg}
+K.~Simonyan and A.~Zisserman, ``Very deep convolutional networks for
+  large-scale image recognition,'' in {\em International Conference on Learning
+  Representations}, 2015.
+
+\bibitem{kingma2015adam}
+D.~P. Kingma and J.~Ba, ``Adam: A method for stochastic optimization,'' {\em
+  International Conference on Learning Representations}, 2015.
+
+\bibitem{suvorov2022lama}
+R.~Suvorov, E.~Logacheva, A.~Mashukov, A.~Ashukha, D.~Vetrov, and V.~Lempitsky,
+  ``Resolution-robust large mask inpainting with fourier convolutions,'' in
+  {\em Proceedings of the IEEE/CVF Winter Conference on Applications of
+  Computer Vision (WACV)}, pp.~2149--2159, 2022.
+
+\end{thebibliography}

@@ -8,7 +8,6 @@
 
 """Generate images using pretrained network pickle."""
 import cv2
-import pyspng
 import glob
 import os
 import re
@@ -20,6 +19,11 @@ import dnnlib
 import numpy as np
 import PIL.Image
 import torch
+
+try:
+    import pyspng
+except ImportError:
+    pyspng = None
 
 import legacy
 from datasets.mask_generator_512 import RandomMask
