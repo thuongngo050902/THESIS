@@ -10,6 +10,9 @@ class TrainingLoopLrtGroupingTest(unittest.TestCase):
         text = (ROOT / "training/training_loop.py").read_text(encoding="utf-8")
         self.assertIn("adapter", text)
         self.assertIn("tran", text)
+        self.assertIn("struct", text)
+        self.assertIn("bias", text)
+        self.assertIn("gate", text)
 
 
 if __name__ == "__main__":

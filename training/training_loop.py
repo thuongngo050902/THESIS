@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
 #
 # NVIDIA CORPORATION and its licensors retain all intellectual property
 # and proprietary rights in and to this software, related documentation
@@ -237,7 +237,7 @@ def training_loop(
             return module.parameters(), opt_kwargs
 
         # New transformer adapters should opt into the higher lrt group via stable name markers.
-        transformer_markers = ['tran', 'Tran', 'adapter', 'Adapter']
+        transformer_markers = ['tran', 'Tran', 'adapter', 'Adapter', 'tran_struct_bias', 'struct_alpha', 'mask_severity_gate']
         base_params = []
         tran_params = []
         for pname, param in module.named_parameters():

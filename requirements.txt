@@ -16,3 +16,10 @@ psutil
 scikit-learn
 streamlit
 streamlit-drawable-canvas
+
+# --- Local inference backend (FastAPI service for Inference_MAT_local_CPU.ipynb) ---
+fastapi
+uvicorn
+python-multipart
+nest_asyncio
+python-dotenv

@@ -36,7 +36,7 @@ FACEART_VAL_PATH = FACEART_ROOT / "val"
 MAT_PRETRAINED_CHECKPOINT_PATH = Path("/content/Places_512_FullData.pkl")
 
 OUTPUT_ROOT = Path("/content/mat_faceart_runs")
-RUN_NAME = "faceart_phase2_ffl"
+RUN_NAME = "faceart_phase3_structure_guidance"
 
 INSTALL_REQUIREMENTS = True
 FORCE_REEXTRACT = False
@@ -67,6 +67,11 @@ ENABLE_MASK_BIAS = False
 ENABLE_DETERMINISTIC_LATENT_GATE = False
 ENABLE_TRAN_ADAPTER_32 = False
 ENABLE_TRAN_ADAPTER_16 = False
+ENABLE_STRUCTURE_GUIDANCE = True
+ENABLE_STRUCTURE_FUSE_16 = True
+ENABLE_STRUCTURE_FUSE_STAGE2 = True
+ENABLE_STRUCTURE_FUSE_32 = False
+ENABLE_ADAPTIVE_STRUCTURE_GATE = True
 
 # -----------------------------------------------------------------------------
 
@@ -341,7 +346,16 @@ def build_train_command():
         command.extend(["--enable-tran-adapter-32", str(ENABLE_TRAN_ADAPTER_32)])
     if ENABLE_TRAN_ADAPTER_16:
         command.extend(["--enable-tran-adapter-16", str(ENABLE_TRAN_ADAPTER_16)])
-
+    if ENABLE_STRUCTURE_GUIDANCE:
+        command.extend(["--enable-structure-guidance", str(ENABLE_STRUCTURE_GUIDANCE)])
+    if ENABLE_STRUCTURE_FUSE_16:
+        command.extend(["--enable-structure-fuse-16", str(ENABLE_STRUCTURE_FUSE_16)])
+    if ENABLE_STRUCTURE_FUSE_STAGE2:
+        command.extend(["--enable-structure-fuse-stage2", str(ENABLE_STRUCTURE_FUSE_STAGE2)])
+    if ENABLE_STRUCTURE_FUSE_32:
+        command.extend(["--enable-structure-fuse-32", str(ENABLE_STRUCTURE_FUSE_32)])
+    if ENABLE_ADAPTIVE_STRUCTURE_GATE:
+        command.extend(["--enable-adaptive-structure-gate", str(ENABLE_ADAPTIVE_STRUCTURE_GATE)])
     return command
 
 

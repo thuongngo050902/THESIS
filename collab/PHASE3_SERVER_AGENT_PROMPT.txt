@@ -1,0 +1,21 @@
+Read /collab/PHASE3_SERVER_HANDOFF.md first and treat /collab/run_phase3_server_from_phase2.sh as the authoritative server launch script.
+
+Work only on the Phase 3 server workflow. Do not modify or reuse the existing Phase 1 or Phase 2 repos in place.
+
+Your job is:
+1. Clone branch codex/phase3-thesis-final into /home/subnh3/projects/ThuongNgo/THESIS-phase3.
+2. Verify the repo is actually on codex/phase3-thesis-final.
+3. Reuse the shared FACEART dataset under /home/subnh3/projects/ThuongNgo/FACEART if it already exists.
+4. Run `bash collab/run_phase3_server_from_phase2.sh prepare`.
+5. Run `bash collab/run_phase3_server_from_phase2.sh resolve-parent` and record the exact RESOLVED_CHECKPOINT_PATH.
+6. If the wrong Phase 2 checkpoint is selected, rerun with CHECKPOINT_PATH=/absolute/path/to/the-correct-network-snapshot.pkl.
+7. Run `bash collab/run_phase3_server_from_phase2.sh dry-run` and confirm the Phase 3 pilot flags are enabled.
+8. Launch the real training inside tmux with session name phase3_job.
+9. Report back:
+   - the repo path
+   - the current branch
+   - the resolved parent checkpoint path
+   - the tmux session name
+   - the exact commands to follow logs
+
+If any checkpoint or dataset path is missing, stop and state exactly which path is missing instead of guessing.

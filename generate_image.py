@@ -218,3 +218,87 @@ if __name__ == "__main__":
     generate_images() # pylint: disable=no-value-for-parameter
 
 #----------------------------------------------------------------------------
+
+
+# -------------------------------------------------------------------------
+# Colab / Streamlit UI inference helper
+# Required by demo_ui/inference_adapter.py:
+#     from generate_image import load_generator_for_inference
+# -------------------------------------------------------------------------
+
+_GENERATOR_INFERENCE_CACHE = {}
+
+def load_generator_for_inference(
+    network_pkl,
+    device=None,
+    resolution=512,
+    allow_missing_params=False,
+):
+    """
+    Load a MAT generator checkpoint for UI/API inference.
+
+    This mirrors generate_images():
+    1. load G_ema from the .pkl checkpoint
+    2. instantiate networks.mat.Generator
+    3. copy params/buffers from saved checkpoint into the current Generator
+    4. return eval/frozen Generator
+
+    Args:
+        network_pkl: path to .pkl checkpoint
+        device: torch.device or string. Defaults to cuda if available.
+        resolution: expected image resolution, default 512.
+        allow_missing_params: if True, allow partial checkpoint loading.
+
+    Returns:
+        Generator ready for inference.
+    """
+    import torch
+
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    elif isinstance(device, str):
+        device = torch.device(device)
+
+    network_pkl = str(network_pkl)
+    net_res = 512 if int(resolution) > 512 else int(resolution)
+
+    cache_key = (
+        network_pkl,
+        str(device),
+        net_res,
+        bool(allow_missing_params),
+    )
+
+    if cache_key in _GENERATOR_INFERENCE_CACHE:
+        return _GENERATOR_INFERENCE_CACHE[cache_key]
+
+    print(f"[load_generator_for_inference] Loading networks from: {network_pkl}")
+    print(f"[load_generator_for_inference] Device: {device}")
+    print(f"[load_generator_for_inference] Resolution: {net_res}")
+
+    with dnnlib.util.open_url(network_pkl) as f:
+        checkpoint = legacy.load_network_pkl(f)
+
+    if "G_ema" not in checkpoint:
+        raise KeyError(
+            f"Checkpoint does not contain 'G_ema'. Available keys: {list(checkpoint.keys())}"
+        )
+
+    G_saved = checkpoint["G_ema"].to(device).eval().requires_grad_(False)
+
+    G = Generator(
+        z_dim=512,
+        c_dim=0,
+        w_dim=512,
+        img_resolution=net_res,
+        img_channels=3,
+    ).to(device).eval().requires_grad_(False)
+
+    copy_params_and_buffers(
+        G_saved,
+        G,
+        require_all=not allow_missing_params,
+    )
+
+    _GENERATOR_INFERENCE_CACHE[cache_key] = G
+    return G

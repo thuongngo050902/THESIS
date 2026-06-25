@@ -1,0 +1,10 @@
+# PARF redesign — clean neutral design system.
+# Replaces the wireframe's sketch styling (paper texture, Caveat/Kalam, amber)
+# with a restrained slate-blue accent on a light, professional surface.
+[theme]
+base = "light"
+primaryColor = "#3B6EA5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F4F7"
+textColor = "#1F2933"
+font = "sans serif"
