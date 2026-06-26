@@ -25,7 +25,16 @@ This document provides a detailed guide on setting up the environment and runnin
 ### 1. Introduction
 This system restores damaged portrait artwork (scratches, cracks, missing structural details) using our proposed deep learning model based on the Mask-Aware Transformer (MAT) architecture. Unlike general-purpose image restoration methods, this model is specifically optimized for artistic portrait faces using Relative Position Bias, Transformer Adapters, and Structure Guidance to preserve brushstrokes and facial geometric alignment.
 
-### 2. Directory Structure
+### 2. Key Features
+* **Multi-Step Pipeline:** Progress seamlessly through `Input & Mask` -> `Masked Input` -> `Stage 1 (Coarse/Finetune)` -> `Final Output (Refined/Adapter)`.
+* **Interactive Canvas & Tools:** Freehand mask painting using `streamlit-drawable-canvas` along with direct geometric presets (`Cross`, `Rect`, `Scribble`).
+* **Mask Nudge Adjustments:** Easily move, scale, and shift the mask alignment via direction buttons (`← Left`, `→ Right`, `↑ Up`, `↓ Down`) to center on facial damage.
+* **Dual Backend Modes:**
+  * **Local:** Runs inference directly on the client machine (supports `cuda`, `cpu`, or `mps` for Apple Silicon).
+  * **Remote:** Offloads computational workloads to a remote GPU server or Google Colab instance via a **FastAPI backend API** (`colab_inference_api.py`).
+* **Visual Comparator & Lightbox:** Side-by-side comparative views of the Original, Stage 1, Stage 2 (Final), and original MAT Baseline outputs. Includes a zoom/pan Lightbox mode for inspecting brush strokes.
+
+### 3. Directory Structure
 Below is the core structure of the repository outlining the function of key folders and scripts:
 
 * [checkpoints/](file:///d:/2025-2026/Thesis/Clone/MAT/checkpoints) — Directory storing trained model weights (`.pkl` snapshot files). Download the required checkpoint files from the [Checkpoints Google Drive Folder](https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link) and place them inside this folder.
@@ -72,11 +81,15 @@ Below is the core structure of the repository outlining the function of key fold
   * **GPU:** Dedicated NVIDIA GPUs (RTX 3090, RTX 4090, A100, RTX A6000) with >= 16GB-24GB VRAM.
   * **CPU:** Intel Xeon or AMD EPYC (8+ cores).
 
-### 2. Virtual Environment Setup
-We recommend using Conda or Miniconda to manage Python packages and prevent C++ library compiler conflicts:
-
-#### Step 1: Create a Python 3.8 virtual environment
+### 2. Clone the Repository
 ```bash
+git clone https://github.com/thuongngo050902/THESIS.git
+cd THESIS
+```
+
+### 3. Environment Setup (Recommended: Conda)
+```bash
+# Create environment with Python 3.8
 conda create -n faceart_env python=3.8 -y
 conda activate faceart_env
 ```
@@ -92,34 +105,33 @@ conda activate faceart_env
     source .venv/bin/activate
     ```
 
-#### Step 2: Install PyTorch
-Choose the command matching your hardware setup:
-* **For NVIDIA GPUs (CUDA 11.8 - Recommended):**
+### 4. Install PyTorch
+Select the command corresponding to your target hardware:
+
+* **NVIDIA GPU (CUDA 11.8 - Recommended):**
   ```bash
   pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
   ```
-* **For Apple Silicon MacBooks (MPS - M1/M2/M3):**
+* **Apple Silicon Macbook (MPS - M1/M2/M3):**
   ```bash
   pip install torch torchvision
   ```
-* **For CPU-only:**
+* **CPU-Only:**
   ```bash
   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
   ```
 
-#### Step 3: Install dependencies and Ninja
-Install the python libraries listed in `requirements.txt`:
+### 5. Install Dependencies & Ninja
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 > [!NOTE]
-> **Ninja Compiler:**
-> The `ninja` compiler is required to build optimized CUDA kernels. Install it using:
+> **Ninja Compiler:** `ninja` is required for building high-performance CUDA kernels during training.
 > * Conda: `conda install -c conda-forge ninja -y`
 > * Pip: `pip install ninja`
-> For CPU or macOS (MPS) environments, if custom CUDA operators fail to compile, the code falls back to CPU implementations automatically.
+> If running on CPU-only or macOS (MPS), if compilation fails, the code defaults automatically to CPU fallbacks.
 
 ---
 
@@ -146,7 +158,6 @@ Expand **Advanced Controls** in the left sidebar to configure inference settings
     * Set `Backend Mode` to `local`.
     * Set `Device` to `cuda` (NVIDIA GPU), `mps` (Apple Silicon MacBook), or `cpu`.
     * Enter the relative file paths of the checkpoints in their input fields.
-
 * **Option B: Remote Backend (Running models on a remote GPU server or Colab)**
   * Useful for lightweight laptops (e.g. standard MacBooks) to offload heavy neural computations to a GPU server over the network.
   * On the remote GPU server, start the FastAPI API server:
@@ -203,7 +214,7 @@ Prepare both `datasets/faceart_train.zip` (training set) and `datasets/faceart_v
 ### 2. Three-Phase Training Flow
 
 #### ⚡ Phase 1: Base Finetuning
-* **Objective:** Finetune the base MAT network on the custom portrait artwork dataset (FaceArt), enabling Relative Position Bias (to model brushstroke spatial relationships), Mask-Aware Additive Bias (to suppress halo artifacts), and Deterministic Latent Gate (to stabilize style mixing).
+Finetunes the base MAT network on the custom portrait artwork dataset using relative biases and deterministic gate configurations.
 * **Automation scripts on server:** `bash collab/run_phase1_server_from_drive.sh prepare`, then run `train` inside a tmux session.
 * **Core training command:**
   ```bash
@@ -213,13 +224,16 @@ Prepare both `datasets/faceart_train.zip` (training set) and `datasets/faceart_v
       --data_val=datasets/faceart_val.zip \
       --cfg=places512 \
       --resume=checkpoints/Places_512_FullData.pkl \
-      --epochs=40 --batch=4 --workers=2 --snap=5 --metrics=none \
-      --pr=0.1 --pl=False --truncation=0.5 --style_mix=0.5 --ema=10 --lr=5e-5 --lrt=1e-4 --lambda-ffl=0.02 --aug=noaug \
-      --enable-rel-pos-bias=True --enable-mask-bias=True --enable-deterministic-latent-gate=True
+      --epochs=40 \
+      --batch=4 \
+      --lr=5e-5 \
+      --enable-rel-pos-bias=True \
+      --enable-mask-bias=True \
+      --enable-deterministic-latent-gate=True
   ```
 
 #### ⚡ Phase 2: Transformer Adapter Training
-* **Objective:** Freeze the core parameters of MAT learned in Phase 1 and insert lightweight adaptable blocks (Transformer Adapters at resolutions of $32 \times 32$ and $16 \times 16$) between attention layers. This enables the model to adapt to portrait artwork style details without destroying its general restoration knowledge.
+Freezes core network parameters and trains lightweight adapter layers at $32 \times 32$ and $16 \times 16$ scales.
 * **Core training command:**
   ```bash
   python train.py \
@@ -228,14 +242,18 @@ Prepare both `datasets/faceart_train.zip` (training set) and `datasets/faceart_v
       --data_val=datasets/faceart_val.zip \
       --cfg=places512 \
       --resume=runs/faceart_phase1_relbias_gate/00000-places512/network-snapshot-000040.pkl \
-      --epochs=30 --batch=4 --workers=2 --snap=5 --metrics=none \
-      --pr=0.1 --pl=False --truncation=0.5 --style_mix=0.5 --ema=10 --lr=2.5e-5 --lrt=1e-4 --lambda-ffl=0.02 --aug=noaug \
-      --enable-rel-pos-bias=True --enable-mask-bias=True --enable-deterministic-latent-gate=True \
-      --enable-tran-adapter-32=True --enable-tran-adapter-16=True
+      --epochs=30 \
+      --batch=4 \
+      --lr=2.5e-5 \
+      --enable-rel-pos-bias=True \
+      --enable-mask-bias=True \
+      --enable-deterministic-latent-gate=True \
+      --enable-tran-adapter-32=True \
+      --enable-tran-adapter-16=True
   ```
 
 #### ⚡ Phase 3: Structure Guidance & Adaptive Gate
-* **Objective:** Activate the portrait structure guidance network (Structure Guidance) to restore large missing components, and train the adaptive gate module (Adaptive Gate) to merge global facial structure details with local adapter textures.
+Enables geometry-guided structures and the adaptive gate module to compile the final outputs.
 * **Automation scripts on server:** `bash collab/run_phase3_server_from_phase2.sh prepare`, then run `train` inside tmux.
 * **Core training command:**
   ```bash
@@ -245,11 +263,18 @@ Prepare both `datasets/faceart_train.zip` (training set) and `datasets/faceart_v
       --data_val=datasets/faceart_val.zip \
       --cfg=places512 \
       --resume=runs/faceart_phase2_tran_adapter/00000-places512/network-snapshot-000030.pkl \
-      --epochs=10 --batch=4 --workers=2 --snap=2 --metrics=none \
-      --pr=0.1 --pl=False --truncation=0.5 --style_mix=0.5 --ema=10 --lr=5e-5 --lrt=1e-4 --lambda-ffl=0.02 --aug=noaug \
-      --enable-rel-pos-bias=True --enable-mask-bias=True --enable-deterministic-latent-gate=True \
-      --enable-tran-adapter-32=True --enable-tran-adapter-16=True \
-      --enable-structure-guidance=True --enable-structure-fuse-16=True --enable-structure-fuse-stage2=True --enable-structure-fuse-32=False --enable-adaptive-structure-gate=True
+      --epochs=10 \
+      --batch=4 \
+      --lr=5e-5 \
+      --enable-rel-pos-bias=True \
+      --enable-mask-bias=True \
+      --enable-deterministic-latent-gate=True \
+      --enable-tran-adapter-32=True \
+      --enable-tran-adapter-16=True \
+      --enable-structure-guidance=True \
+      --enable-structure-fuse-16=True \
+      --enable-structure-fuse-stage2=True \
+      --enable-adaptive-structure-gate=True
   ```
 
 ### 3. Training Monitoring
