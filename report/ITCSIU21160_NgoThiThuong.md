@@ -28,7 +28,7 @@ This system restores damaged portrait artwork (scratches, cracks, missing struct
 ### 2. Directory Structure
 Below is the core structure of the repository outlining the function of key folders and scripts:
 
-* [checkpoints/](file:///d:/2025-2026/Thesis/Clone/MAT/checkpoints) — Directory storing trained model weights (`.pkl` snapshot files).
+* [checkpoints/](file:///d:/2025-2026/Thesis/Clone/MAT/checkpoints) — Directory storing trained model weights (`.pkl` snapshot files). Download the required checkpoint files from the [Checkpoints Google Drive Folder](https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link) and place them inside this folder.
 * [collab/](file:///d:/2025-2026/Thesis/Clone/MAT/collab) — Scripts and utilities for training and inference on Colab or remote GPU servers.
   * [run_phase1_server_from_drive.sh](file:///d:/2025-2026/Thesis/Clone/MAT/collab/run_phase1_server_from_drive.sh) — Automatic script to download data and train Phase 1.
   * [run_phase3_server_from_phase2.sh](file:///d:/2025-2026/Thesis/Clone/MAT/collab/run_phase3_server_from_phase2.sh) — Automatic script to resume Phase 2 and train Phase 3.
@@ -138,7 +138,7 @@ Once running, open your web browser and navigate to: [http://127.0.0.1:8501](htt
 Expand **Advanced Controls** in the left sidebar to configure inference settings:
 * **Option A: Local Backend (Running models on your machine)**
   * Best for personal computers with NVIDIA GPUs or Apple Silicon Macbooks.
-  * Download the trained model checkpoints (`.pkl`) and place them in the `checkpoints/` folder:
+  * Download the trained model checkpoints (`.pkl`) from the **[Checkpoints Google Drive Folder](https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link)** and place them in a folder named `checkpoints/` in the root workspace directory:
     * Stage 1 Coarse: `resume_phase1_from_finetune_plus_loss.pkl`
     * Final Output (Phase 3): `network-snapshot-000072.pkl`
     * Original MAT (Baseline): `Places_512_FullData.pkl`
@@ -146,6 +146,7 @@ Expand **Advanced Controls** in the left sidebar to configure inference settings
     * Set `Backend Mode` to `local`.
     * Set `Device` to `cuda` (NVIDIA GPU), `mps` (Apple Silicon MacBook), or `cpu`.
     * Enter the relative file paths of the checkpoints in their input fields.
+
 * **Option B: Remote Backend (Running models on a remote GPU server or Colab)**
   * Useful for lightweight laptops (e.g. standard MacBooks) to offload heavy neural computations to a GPU server over the network.
   * On the remote GPU server, start the FastAPI API server:
