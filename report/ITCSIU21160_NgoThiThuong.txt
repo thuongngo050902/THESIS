@@ -27,7 +27,7 @@ This system restores damaged portrait artwork (scratches, cracks, missing struct
 Below is the core structure of the repository outlining the function of key folders and scripts:
 
 THESIS/ (Root workspace folder)
-├── checkpoints/          # Directory storing trained model weights (.pkl files).
+├── checkpoints/          # Directory storing weights (.pkl files). Download files from https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link
 ├── collab/               # Scripts/utilities for training & inference on Colab or GPU servers.
 │   ├── run_phase1_server_from_drive.sh   # Automatically download data & train Phase 1.
 │   └── run_phase3_server_from_phase2.sh   # Automatically resume Phase 2 & train Phase 3.
@@ -124,7 +124,7 @@ Configure on Advanced Controls (Sidebar Panel):
   * Set to "cuda" if using NVIDIA GPU.
   * Set to "mps" if using Apple Silicon MacBook (M1/M2/M3) to enable GPU acceleration.
   * Set to "cpu" for standard CPU execution.
-- Checkpoint Paths:
+- Checkpoint Paths (Download .pkl weights from Drive: https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link):
   * Stage 1 Coarse: checkpoints/resume_phase1_from_finetune_plus_loss.pkl
   * Final Output (Phase 3): checkpoints/network-snapshot-000072.pkl
   * Original MAT (Baseline): checkpoints/Places_512_FullData.pkl

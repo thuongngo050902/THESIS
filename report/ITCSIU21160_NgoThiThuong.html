@@ -261,7 +261,7 @@
         <h2>2. Directory Structure</h2>
         <p>Below is the core structure of the repository outlining the function of key folders and scripts:</p>
         <ul>
-            <li><code>checkpoints/</code> — Directory storing trained model weights (.pkl files).</li>
+            <li><code>checkpoints/</code> — Directory storing trained model weights (.pkl files). Download these checkpoint files from the <a href="https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link" target="_blank">Checkpoints Google Drive Folder</a>.</li>
             <li><code>collab/</code> — Scripts and utilities for training and inference on Colab or remote GPU servers.
                 <ul>
                     <li><code>run_phase1_server_from_drive.sh</code> — Automatically download data and train Phase 1.</li>
@@ -405,7 +405,7 @@ pip install -r requirements.txt</code></pre>
             <li><strong>Option A: Local Backend (Running models on your machine)</strong>
                 <ul>
                     <li>Best for personal computers with NVIDIA GPUs or Apple Silicon Macbooks.</li>
-                    <li>Download the trained model checkpoints (.pkl) and place them in the <code>checkpoints/</code> folder:
+                    <li>Download the trained model checkpoints (.pkl) from the <a href="https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link" target="_blank">Checkpoints Google Drive Folder</a> and place them in a folder named <code>checkpoints/</code> in the root workspace directory:
                         <ul>
                             <li>Stage 1 Coarse: <code>resume_phase1_from_finetune_plus_loss.pkl</code></li>
                             <li>Final Output (Phase 3): <code>network-snapshot-000072.pkl</code></li>
