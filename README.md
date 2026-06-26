@@ -200,3 +200,10 @@ We also provide our masks for CelebA-HQ-val and Places-val [here](https://mycuhk
 
 ## License and Acknowledgement
 The code and models in this repo are for research purposes only. Our code is bulit upon [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada-pytorch).
+
+---
+## Thesis Codebase Integration
+This repository has been consolidated and prepared for the final thesis submission.
+- Consolidated development branches: Phase 1, Phase 2, Phase 3, CPU Mac support, and Streamlit interactive UI.
+- All development history and metrics pipelines integrated.
+
