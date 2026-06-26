@@ -1,209 +1,244 @@
-# MAT:  (CVPR 2022 Best Paper Finalist, Oral)
+# Portrait Artwork Restoration (FaceArt Restoration) using Mask-Aware Transformer (MAT)
 
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mat-mask-aware-transformer-for-large-hole/image-inpainting-on-places2-1)](https://paperswithcode.com/sota/image-inpainting-on-places2-1?p=mat-mask-aware-transformer-for-large-hole)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mat-mask-aware-transformer-for-large-hole/image-inpainting-on-celeba-hq)](https://paperswithcode.com/sota/image-inpainting-on-celeba-hq?p=mat-mask-aware-transformer-for-large-hole)
+[![Python 3.8](https://img.shields.io/badge/Python-3.8-blue.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%3E%3D%201.7.1-red.svg)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100.0%2B-green.svg)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.40.0%2B-ff4b4b.svg)](https://streamlit.io/)
+[![License](https://img.shields.io/badge/License-Research--Only-orange.svg)](LICENSE)
 
-#### Wenbo Li, Zhe Lin, Kun Zhou, Lu Qi, Yi Wang, Jiaya Jia
+This repository contains the official implementation of the graduation thesis project: **Portrait Artwork Restoration (FaceArt Restoration) using Mask-Aware Transformer (MAT)**.
 
-#### [\[Paper\]](https://arxiv.org/abs/2203.15270)
----
-
-## :rocket:  :rocket:  :rocket: **News**
-
-- **\[2022.10.03\]** Model for FFHQ-512 is available. ([Link](https://mycuhk-my.sharepoint.com/:u:/g/personal/1155137927_link_cuhk_edu_hk/ESwt5gvPs4JOvC76WAEDfb4BSJZNy-qsfJSUZz2kTxYyWw?e=71nHCJ))
-
-- **\[2022.09.10\]** We could provide all testing images of Places and CelebA inpainted by our MAT and other methods. Since there are too many images, please send an email to wenboli@cse.cuhk.edu.hk and explain your needs.
-
-- **\[2022.06.21\]** We provide a SOTA Places-512 model ([Places\_512\_FullData.pkl](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155137927_link_cuhk_edu_hk/EuY30ziF-G5BvwziuHNFzDkBVC6KBPRg69kCeHIu-BXORA?e=7OwJyE)) trained with full Places data (8M images). It achieves significant improvements on all metrics.
-
-    <table>
-    <thead>
-      <tr>
-        <th rowspan="2">Model</th>
-        <th rowspan="2">Data</th>
-        <th colspan="3">Small Mask</th>
-        <th colspan="3">Large Mask</th>
-      </tr>
-      <tr>
-        <th>FID&darr;</th>
-        <th>P-IDS&uarr;</th>
-        <th>U-IDS&uarr;</th>
-        <th>FID&darr;</th>
-        <th>P-IDS&uarr;</th>
-        <th>U-IDS&uarr;</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>MAT (Ours)</td>
-        <td>8M</td>
-        <td><b>0.78</b></td>
-        <td><b>31.72</b></td>
-        <td><b>43.71</b></td>
-        <td><b>1.96</b></td>
-        <td><b>23.42</b></td>
-        <td><b>38.34</b></td>
-      </tr>
-      <tr>
-        <td>MAT (Ours)</td>
-        <td>1.8M</td>
-        <td>1.07</td>
-        <td>27.42</td>
-        <td>41.93</td>
-        <td>2.90</td>
-        <td>19.03</td>
-        <td>35.36</td>
-      </tr>
-      <tr>
-        <td>CoModGAN</td>
-        <td>8M</td>
-        <td>1.10</td>
-        <td>26.95</td>
-        <td>41.88</td>
-        <td>2.92</td>
-        <td>19.64</td>
-        <td>35.78</td>
-      </tr>
-      <tr>
-        <td>LaMa-Big</td>
-        <td>4.5M</td>
-        <td>0.99</td>
-        <td>22.79</td>
-        <td>40.58</td>
-        <td>2.97</td>
-        <td>13.09</td>
-        <td>32.39</td>
-      </tr>
-    </tbody>
-    </table>
-
-- **\[2022.06.19\]** We have uploaded the CelebA-HQ-256 model and masks. Because the original model was lost, we retrained the model so that the results may slightly differ from the reported ones.
+* **Author:** Ngô Thị Thương (Student ID: **ITCSIU21160**)
+* **Advisor:** TS. Lê Thị Ngọc Hạnh
+* **Affiliation:** School of Computer Science and Engineering, International University - VNU-HCM
+* **Department:** Computer Science
 
 ---
 
-## Web Demo
+## 📖 Project Overview
 
-Thank [Replicate](https://replicate.com/home) for providing a [web demo](https://replicate.com/fenglinglwb/large-hole-image-inpainting) for our MAT. But I didn't check if this demo is correct. You are recommended to use our models as following.
+FaceArt Restoration focuses on restoring severely damaged, cracked, or missing areas in historical portrait paintings. Traditional image inpainting methods struggle with large-hole restorations in artistic styles. This project introduces a robust, multi-phase framework built on the state-of-the-art **Mask-Aware Transformer (MAT)** (CVPR 2022 Best Paper Finalist) to restore structural coherence and fine artistic textures to portrait artwork.
+
+### Core Innovations & Architecture
+
+The architecture optimizes the standard MAT model using a **Three-Phase Training & Architecture Framework**:
+
+1. **Relative Position Bias & Additive Mask Bias:** Introduces relative spatial weights inside window-based attention layers to accommodate non-local textures, alongside mask-aware biases to guide attention away from invalid pixels.
+2. **Deterministic Latent Gate:** Stabilizes the mixing of style features and latent representations to avoid mode collapse on art distributions.
+3. **Multi-Scale Transformer Adapters:** Injectable adapter modules trained at $32 \times 32$ and $16 \times 16$ resolutions to preserve general MAT features while fitting the specific domain of portrait paintings.
+4. **Structure Guidance & Adaptive Gate (Phase 3):** Embeds structural features of facial geometry (such as eyes, nose, mouth lines) into the decoding process, balanced by an adaptive gate to dynamically weigh structural consistency versus localized textures.
 
 ---
 
-## Visualization
+## 🖥️ Streamlit Interactive UI
 
-We present a transformer-based model (MAT) for large hole inpainting with high fidelity and diversity.
+The project features a premium Web UI powered by **Streamlit** for interactive, step-by-step restoration.
 
-![large hole inpainting with pluralistic generation](/figures/teasing.png)
+![Streamlit UI Architecture](figures/teasing.png)
 
-Compared to other methods, the proposed MAT restores more photo-realistic images with fewer artifacts.
+### Key Features
+* **Multi-Step Pipeline:** Progress seamlessly through `Input & Mask` $\to$ `Masked Input` $\to$ `Stage 1 (Coarse/Finetune)` $\to$ `Final Output (Refined/Adapter)`.
+* **Interactive Canvas & Tools:** Freehand mask painting using `streamlit-drawable-canvas` along with direct geometric presets (`Cross`, `Rect`, `Scribble`).
+* **Mask Nudge Adjustments:** Easily move, scale, and shift the mask alignment via direction buttons (`← Left`, `→ Right`, `↑ Up`, `↓ Down`) to center on facial damage.
+* **Dual Backend Modes:** 
+  * **Local:** Runs inference directly on the client machine (supports `cuda`, `cpu`, or `mps` for Apple Silicon).
+  * **Remote:** Offloads computational workloads to a remote GPU server or Google Colab instance via a **FastAPI backend API** (`colab_inference_api.py`).
+* **Visual Comparator & Lightbox:** Side-by-side comparative views of the Original, Stage 1, Stage 2 (Final), and original MAT Baseline outputs. Includes a zoom/pan Lightbox mode for inspecting brush strokes.
 
-![comparison with sotas](/figures/sota.png)
+---
 
-## Usage
+## 🛠️ Installation & Setup
 
-It is highly recommanded to adopt Conda/MiniConda to manage the environment to avoid some compilation errors.
-
-1. Clone the repository.
-    ```shell
-    git clone https://github.com/fenglinglwb/MAT.git 
-    ```
-2. Install the dependencies.
-    - Python 3.7
-    - PyTorch 1.7.1
-    - Cuda 11.0
-    - Other packages
-    ```shell
-    pip install -r requirements.txt
-    ```
-
-## Quick Test
-
-1. We provide models trained on CelebA-HQ, FFHQ and Places365-Standard at 512x512 resolution. Download models from [One Drive](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155137927_link_cuhk_edu_hk/EuY30ziF-G5BvwziuHNFzDkBVC6KBPRg69kCeHIu-BXORA?e=7OwJyE) and put them into the 'pretrained' directory. The released models are retrained, and hence the visualization results may slightly differ from the paper.
-
-2. Obtain inpainted results by running
-    ```shell
-    python generate_image.py --network model_path --dpath data_path --outdir out_path [--mpath mask_path]
-    ```
-    where the mask path is optional. If not assigned, random 512x512 masks will be generated. Note that 0 and 1 values in a mask refer to masked and remained pixels.
-
-    For example, run
-    ```shell
-    python generate_image.py --network pretrained/CelebA-HQ.pkl --dpath test_sets/CelebA-HQ/images --mpath test_sets/CelebA-HQ/masks --outdir samples
-    ```
-
-    Note. 
-    - Our implementation only supports generating an image whose size is a multiple of 512. You need to pad or resize the image to make its size a multiple of 512. Please pad the mask with 0 values.
-    - If you want to use the CelebA-HQ-256 model, please specify the parameter 'resolution' as 256 in generate\_image.py.
-
-## Train
-
-For example, if you want to train a model on Places, run a bash script with
-```shell
-python train.py \
-    --outdir=output_path \
-    --gpus=8 \
-    --batch=32 \
-    --metrics=fid36k5_full \
-    --data=training_data_path \
-    --data_val=val_data_path \
-    --dataloader=datasets.dataset_512.ImageFolderMaskDataset \
-    --mirror=True \
-    --cond=False \
-    --cfg=places512 \
-    --aug=noaug \
-    --generator=networks.mat.Generator \
-    --discriminator=networks.mat.Discriminator \
-    --loss=losses.loss.TwoStageLoss \
-    --pr=0.1 \
-    --pl=False \
-    --truncation=0.5 \
-    --style_mix=0.5 \
-    --ema=10 \
-    --lr=0.001
+### 1. Clone the Repository
+```bash
+git clone https://github.com/thuongngo050902/THESIS.git
+cd THESIS
 ```
 
-Description of arguments:
-- outdir: output path for saving logs and models
-- gpus: number of used gpus
-- batch: number of images in all gpus
-- metrics: find more metrics in 'metrics/metric\_main.py'
-- data: training data
-- data\_val: validation data
-- dataloader: you can define your own dataloader
-- mirror: use flip augmentation or not 
-- cond: use class info, default: false
-- cfg: configuration, find more details in 'train.py'
-- aug: use augmentation of style-gan-ada or not, default: false
-- generator: you can define your own generator
-- discriminator: you can define your own discriminator
-- loss: you can define your own loss
-- pr: ratio of perceptual loss
-- pl: use path length regularization or not, default: false
-- truncation: truncation ratio proposed in stylegan
-- style\_mix: style mixing ratio proposed in stylegan
-- ema: exponoential moving averate, ~K samples
-- lr: learning rate
+### 2. Environment Setup (Recommended: Conda)
+```bash
+# Create environment with Python 3.8
+conda create -n faceart_env python=3.8 -y
+conda activate faceart_env
+```
+*(Alternatively, configure a standard Python venv)*
 
-## Evaluation
+### 3. Install PyTorch
+Select the command corresponding to your target hardware:
 
-We provide evaluation scrtips for FID/U-IDS/P-IDS/LPIPS/PSNR/SSIM/L1 metrics in the 'evaluation' directory. Only need to give paths of your results and GTs.
+* **NVIDIA GPU (CUDA 11.8 - Recommended):**
+  ```bash
+  pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
+  ```
+* **Apple Silicon Macbook (MPS - M1/M2/M3):**
+  ```bash
+  pip install torch torchvision
+  ```
+* **CPU-Only:**
+  ```bash
+  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+  ```
 
-We also provide our masks for CelebA-HQ-val and Places-val [here](https://mycuhk-my.sharepoint.com/:f:/g/personal/1155137927_link_cuhk_edu_hk/EuY30ziF-G5BvwziuHNFzDkBVC6KBPRg69kCeHIu-BXORA?e=7OwJyE).
+### 4. Install Dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-
-## Citation
-
-    @inproceedings{li2022mat,
-        title={MAT: Mask-Aware Transformer for Large Hole Image Inpainting},
-        author={Li, Wenbo and Lin, Zhe and Zhou, Kun and Qi, Lu and Wang, Yi and Jia, Jiaya},
-        booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-        year={2022}
-    }
-
-## License and Acknowledgement
-The code and models in this repo are for research purposes only. Our code is bulit upon [StyleGAN2-ADA](https://github.com/NVlabs/stylegan2-ada-pytorch).
+> [!NOTE]
+> **Ninja Compiler:** `ninja` is required for building high-performance CUDA kernels during training.
+> * Conda: `conda install -c conda-forge ninja -y`
+> * Pip: `pip install ninja`
+> If running on CPU-only or macOS (MPS), if compilation fails, the code defaults automatically to CPU fallbacks.
 
 ---
-## Thesis Codebase Integration
-This repository has been consolidated and prepared for the final thesis submission.
-- Consolidated development branches: Phase 1, Phase 2, Phase 3, CPU Mac support, and Streamlit interactive UI.
-- All development history and metrics pipelines integrated.
 
+## 🚀 How to Run the Application
+
+### 1. Launching the Web UI
+Run the following command to start the Streamlit application:
+```bash
+streamlit run streamlit_app.py --server.port 8501 --server.address 127.0.0.1
+```
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501) on your web browser.
+
+### 2. Running the Remote API Backend
+To run the server backend on a remote machine equipped with GPU acceleration (or Colab):
+```bash
+uvicorn colab_inference_api:app --host 0.0.0.0 --port 8000
+```
+On the Streamlit UI, open **Advanced Controls** in the sidebar, switch `Backend Mode` to `remote`, and paste the host address (e.g. `http://<your-server-ip>:8000` or the generated ngrok URL).
+
+### 3. Command-Line Interface (CLI) Batch Inference
+To run inference directly through the command-line on a directory of images:
+```bash
+python generate_image.py \
+    --network checkpoints/network-snapshot-000072.pkl \
+    --dpath test_sets/CelebA-HQ/images \
+    --mpath test_sets/CelebA-HQ/masks \
+    --outdir samples_output
+```
+*Note: Input images must have dimensions that are multiples of 512. Standard sizes like 512x512 are fully supported.*
+
+---
+
+## 🏋️ Model Training Workflow
+
+Model training follows a strict **3-Phase training process** to ensure fine details and global structures are learned in stages.
+
+### 1. Dataset Preparation
+Pack images into an uncompressed ZIP format to accelerate GPU I/O operations:
+```bash
+python dataset_tool.py --source /path/to/raw/images --dest datasets/faceart_train.zip --width 512 --height 512
+```
+
+### 2. Training Stages
+
+#### ⚡ Phase 1: Base Finetuning
+Finetunes the base MAT network on the custom portrait artwork dataset using relative biases and deterministic gate configurations.
+```bash
+python train.py \
+    --outdir=runs/faceart_phase1_relbias_gate \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=checkpoints/Places_512_FullData.pkl \
+    --epochs=40 \
+    --batch=4 \
+    --lr=5e-5 \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True
+```
+
+#### ⚡ Phase 2: Transformer Adapter Training
+Freezes core network parameters and trains lightweight adapter layers at $32 \times 32$ and $16 \times 16$ scales.
+```bash
+python train.py \
+    --outdir=runs/faceart_phase2_tran_adapter \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=runs/faceart_phase1_relbias_gate/00000-places512/network-snapshot-000040.pkl \
+    --epochs=30 \
+    --batch=4 \
+    --lr=2.5e-5 \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True \
+    --enable-tran-adapter-32=True \
+    --enable-tran-adapter-16=True
+```
+
+#### ⚡ Phase 3: Structure Guidance & Adaptive Gate Training
+Enables geometry-guided structures and the adaptive gate module to compile the final outputs.
+```bash
+python train.py \
+    --outdir=runs/faceart_phase3_adaptive_structure_guidance \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=runs/faceart_phase2_tran_adapter/00000-places512/network-snapshot-000030.pkl \
+    --epochs=10 \
+    --batch=4 \
+    --lr=5e-5 \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True \
+    --enable-tran-adapter-32=True \
+    --enable-tran-adapter-16=True \
+    --enable-structure-guidance=True \
+    --enable-structure-fuse-16=True \
+    --enable-structure-fuse-stage2=True \
+    --enable-adaptive-structure-gate=True
+```
+
+*Note: Automation training scripts for tmux and background training are provided in [collab/](file:///d:/2025-2026/Thesis/Clone/MAT/collab/).*
+
+---
+
+## 📊 Quantitative Metrics Evaluation
+
+To calculate standard image quality evaluation metrics, use the scripts provided in the `evaluation/` directory:
+
+1. **PSNR, SSIM, and L1 Loss:**
+   ```bash
+   python evaluation/eval_psnr_ssim.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images
+   ```
+2. **LPIPS (Learned Perceptual Image Patch Similarity):**
+   ```bash
+   python evaluation/eval_lpips.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images
+   ```
+3. **FID (Fréchet Inception Distance):**
+   ```bash
+   python evaluation/eval_fid.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images
+   ```
+
+---
+
+## 📜 Citation & Acknowledgements
+
+This thesis project builds upon the foundations of the following research papers:
+
+```bibtex
+@inproceedings{li2022mat,
+    title={MAT: Mask-Aware Transformer for Large Hole Image Inpainting},
+    author={Li, Wenbo and Lin, Zhe and Zhou, Kun and Qi, Lu and Wang, Yi and Jia, Jiaya},
+    booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+    year={2022}
+}
+
+@inproceedings{karras2020ada,
+  title     = {Training Generative Adversarial Networks with Limited Data},
+  author    = {Tero Karras and Miika Aittala and Janne Hellsten and Jaakko Lehtinen and Timo Aila and Samuli Laine},
+  booktitle = {Proc. NeurIPS},
+  year      = {2020}
+}
+```
+
+---
+
+## 📄 Vietnamese Documentation
+
+For a detailed step-by-step installation, Google Colab/FastAPI server connection, Streamlit Web UI controls, and model retraining instructions written in Vietnamese, please refer to:  
+👉 **[Installation & Operation Guide (Vietnamese)](file:///d:/2025-2026/Thesis/Clone/MAT/ITCSIU21160_NgoThiThuong.md)**
