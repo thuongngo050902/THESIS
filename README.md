@@ -238,6 +238,7 @@ This thesis project builds upon the foundations of the following research papers
 
 ---
 
-## 🇻🇳 Hướng dẫn bằng Tiếng Việt
-Chi tiết hướng dẫn cài đặt cục bộ, kết nối máy chủ Google Colab/FastAPI, điều khiển nâng cao trên giao diện Web Streamlit và quy trình huấn luyện lại được biên soạn tiếng Việt tại:  
-👉 **[Tài liệu Hướng dẫn Cài đặt & Vận hành (Vietnamese Guide)](file:///d:/2025-2026/Thesis/Clone/MAT/ITCSIU21160_NgoThiThuong.md)**
+## 📄 Vietnamese Documentation
+
+For a detailed step-by-step installation, Google Colab/FastAPI server connection, Streamlit Web UI controls, and model retraining instructions written in Vietnamese, please refer to:  
+👉 **[Installation & Operation Guide (Vietnamese)](file:///d:/2025-2026/Thesis/Clone/MAT/ITCSIU21160_NgoThiThuong.md)**
