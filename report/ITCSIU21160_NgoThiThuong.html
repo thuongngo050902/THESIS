@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installation and Operation Guide - Bachelor's Thesis - Ngo Thi Thuong</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        @page {
+            size: A4;
+            margin: 2.5cm 2cm 2.5cm 2cm;
+            @bottom-right {
+                content: counter(page);
+                font-family: 'Inter', sans-serif;
+                font-size: 9pt;
+                color: #6b7280;
+            }
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1f2937;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Cover & Header Styling */
+        .header-container {
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .university-title {
+            font-size: 11pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 5px 0;
+            color: #1e3a8a;
+        }
+
+        .department-title {
+            font-size: 10pt;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin: 0 0 20px 0;
+            color: #4b5563;
+        }
+
+        .doc-title {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #111827;
+            margin: 20px 0 10px 0;
+            line-height: 1.3;
+            text-transform: uppercase;
+        }
+
+        .doc-subtitle {
+            font-size: 12pt;
+            font-weight: 500;
+            color: #4b5563;
+            margin: 0 0 30px 0;
+            font-style: italic;
+        }
+
+        .meta-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: left;
+            font-size: 10.5pt;
+            background-color: #f8fafc;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .meta-value {
+            color: #0f172a;
+        }
+
+        /* Typography & Layout */
+        h1 {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #1e3a8a;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            page-break-after: avoid;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #2563eb;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            page-break-after: avoid;
+        }
+
+        h3 {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #1e293b;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            page-break-after: avoid;
+        }
+
+        p {
+            margin-top: 0;
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+
+        ul, ol {
+            margin-top: 0;
+            margin-bottom: 15px;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        /* Code Blocks */
+        code {
+            font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            font-size: 9.5pt;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            padding: 2px 5px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        pre {
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 10px;
+            margin-bottom: 18px;
+            border: 1px solid #1e293b;
+            page-break-inside: avoid;
+        }
+
+        pre code {
+            background-color: transparent;
+            color: #f8fafc;
+            padding: 0;
+            border: none;
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+
+        /* Alerts & Callouts */
+        .alert-box {
+            padding: 12px 18px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border-left: 4px solid;
+            page-break-inside: avoid;
+        }
+
+        .alert-note {
+            background-color: #eff6ff;
+            border-color: #3b82f6;
+            color: #1e3a8a;
+        }
+
+        .alert-important {
+            background-color: #fffbeb;
+            border-color: #f59e0b;
+            color: #78350f;
+        }
+
+        .alert-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .alert-content {
+            font-size: 10pt;
+            margin: 0;
+        }
+
+        /* Page breaks */
+        .page-break {
+            page-break-before: always;
+        }
+
+        .section-container {
+            page-break-inside: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Block (Page 1) -->
+    <div class="header-container">
+        <div class="university-title">Vietnam National University Ho Chi Minh City</div>
+        <div class="university-title">International University</div>
+        <div class="department-title">School of Computer Science and Engineering</div>
+        
+        <div class="doc-title" style="margin-top: 20px;">THESIS - SEMESTER 2 (2025 - 2026)</div>
+        <div class="doc-subtitle" style="font-size: 11pt; margin-bottom: 25px;">Installation and Operation Guide</div>
+        
+        <div class="meta-info-grid" style="margin-bottom: 25px;">
+            <div class="meta-label">Full name:</div>
+            <div class="meta-value">Ngo Thi Thuong</div>
+            
+            <div class="meta-label">Student ID:</div>
+            <div class="meta-value">ITCSIU21160</div>
+        </div>
+
+        <h2 style="color: #1e3a8a; font-size: 12pt; margin-bottom: 5px; text-transform: uppercase;">
+            THESIS TITLE: A DEEP LEARNING APPROACH FOR ARTWORK RECONSTRUCTION
+        </h2>
+        <div style="font-size: 10pt; color: #4b5563; margin-bottom: 20px; font-style: italic;">
+            (An extended framework based on Mask-Aware Transformer - MAT)
+        </div>
+
+        <div style="font-size: 11pt; font-weight: 600; margin-bottom: 10px; color: #1e293b;">
+            GitHub Link: <a href="https://github.com/thuongngo050902/THESIS" target="_blank" style="color: #2563eb; text-decoration: underline;">thuongngo050902/THESIS</a>
+        </div>
+    </div>
+
+    <div class="section-container">
+        <p>This document provides a detailed guide on setting up the environment and running experiments for the portrait artwork restoration system (FaceArt Restoration) using our proposed deep learning model based on the Mask-Aware Transformer (MAT) architecture. The guide covers the project structure, environment configuration for NVIDIA GPUs, Apple Silicon MacBooks (MPS), running the interactive Streamlit Web UI, using the CLI for inference, and the three-stage model retraining workflow to reproduce the results.</p>
+    </div>
+
+    <!-- Section I -->
+    <div class="section-container">
+        <h1>I. System Overview & Repository Structure</h1>
+        
+        <h2>1. Introduction</h2>
+        <p>This system restores damaged portrait artwork (scratches, cracks, missing structural details) using our proposed deep learning model based on the Mask-Aware Transformer (MAT) architecture. Unlike general-purpose image restoration methods, this model is specifically optimized for artistic portrait faces using Relative Position Bias, Transformer Adapters, and Structure Guidance to preserve brushstrokes and facial geometric alignment.</p>
+
+        <h2>2. Directory Structure</h2>
+        <p>Below is the core structure of the repository outlining the function of key folders and scripts:</p>
+        <ul>
+            <li><code>checkpoints/</code> — Directory storing trained model weights (.pkl files).</li>
+            <li><code>collab/</code> — Scripts and utilities for training and inference on Colab or remote GPU servers.
+                <ul>
+                    <li><code>run_phase1_server_from_drive.sh</code> — Automatically download data and train Phase 1.</li>
+                    <li><code>run_phase3_server_from_phase2.sh</code> — Automatically resume Phase 2 and train Phase 3.</li>
+                </ul>
+            </li>
+            <li><code>datasets/</code> — Data loader implementation and degradation mask generation.
+                <ul>
+                    <li><code>dataset_512.py</code> — Training data loader for 512x512 resolution.</li>
+                    <li><code>mask_generator_512.py</code> — Simulates irregular paint-loss damage masks.</li>
+                </ul>
+            </li>
+            <li><code>demo_ui/</code> — Support scripts for the Streamlit web application.
+                <ul>
+                    <li><code>inference_adapter.py</code> — Routes inference to local device or remote FastAPI server.</li>
+                    <li><code>parf_compare.py</code> — Side-by-side comparison layout visualization.</li>
+                </ul>
+            </li>
+            <li><code>dnnlib/</code> — Low-level utilities for configuration and logging (StyleGAN2-ADA).</li>
+            <li><code>evaluation/</code> — Scripts for quantitative evaluation of restoration quality.
+                <ul>
+                    <li><code>eval_psnr_ssim.py</code> — Measures Peak Signal-to-Noise Ratio & Structural Similarity.</li>
+                    <li><code>eval_fid.py</code> — Measures Fréchet Inception Distance (FID).</li>
+                </ul>
+            </li>
+            <li><code>losses/</code> — Core loss functions used in network optimization.
+                <ul>
+                    <li><code>loss.py</code> — Core two-stage loss of Mask-Aware Transformer.</li>
+                    <li><code>focal_frequency_loss.py</code> — Focal Frequency Loss for fine paint textures.</li>
+                </ul>
+            </li>
+            <li><code>networks/</code> — Neural network architecture definitions.
+                <ul>
+                    <li><code>mat.py</code> — Main MAT model with window-based attention layers.</li>
+                    <li><code>structure_guidance.py</code> — Geometric structure guidance network (Phase 3).</li>
+                </ul>
+            </li>
+            <li><code>torch_utils/</code> — Deep learning helper functions.</li>
+            <li><code>training/</code> — Core training loops and parameter configurations.</li>
+            <li><code>dataset_tool.py</code> — Packages raw images into uncompressed ZIP datasets.</li>
+            <li><code>generate_image.py</code> — CLI batch inference script.</li>
+            <li><code>requirements.txt</code> — Python dependencies list.</li>
+            <li><code>streamlit_app.py</code> — Entrypoint starting the interactive Streamlit UI.</li>
+        </ul>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section II -->
+    <div class="section-container">
+        <h1>II. System Requirements & Environment Setup</h1>
+        
+        <h2>1. Hardware Requirements</h2>
+        <ul>
+            <li><strong>For Inference & Web UI Demo:</strong>
+                <ul>
+                    <li><strong>OS:</strong> Windows 10/11, macOS Big Sur or newer (Intel & Apple Silicon M1/M2/M3 supported), or Linux Ubuntu 18.04+.</li>
+                    <li><strong>RAM:</strong> Minimum 16 GB.</li>
+                    <li><strong>GPU Acceleration:</strong>
+                        <ul>
+                            <li><strong>Windows/Linux:</strong> CUDA-capable NVIDIA GPU (Minimum 6-8 GB VRAM).</li>
+                            <li><strong>MacBook:</strong> Apple Silicon M-series (using Metal Performance Shaders - MPS on the integrated GPU).</li>
+                            <li><strong>CPU-only:</strong> Supported on all platforms (slower processing speed).</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li><strong>For Model Training:</strong>
+                <ul>
+                    <li><strong>OS:</strong> Linux Ubuntu 20.04/22.04 LTS (Recommended).</li>
+                    <li><strong>GPU:</strong> Dedicated NVIDIA GPUs (RTX 3090, RTX 4090, A100, RTX A6000) with >= 16GB-24GB VRAM.</li>
+                    <li><strong>CPU:</strong> Intel Xeon or AMD EPYC (8+ cores).</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>2. Virtual Environment Setup</h2>
+        <p>We recommend using Conda or Miniconda to manage Python packages and prevent C++ library compiler conflicts:</p>
+        
+        <h3>Step 1: Create a Python 3.8 virtual environment</h3>
+        <pre><code>conda create -n faceart_env python=3.8 -y
+conda activate faceart_env</code></pre>
+        
+        <p><strong>Alternative (Using traditional Python venv):</strong></p>
+        <ul>
+            <li><em>On Windows (PowerShell):</em>
+                <pre><code>python -m venv .venv
+.venv\Scripts\Activate.ps1</code></pre>
+            </li>
+            <li><em>On Linux/macOS:</em>
+                <pre><code>python3 -m venv .venv
+source .venv/bin/activate</code></pre>
+            </li>
+        </ul>
+
+        <h3>Step 2: Install PyTorch</h3>
+        <p>Choose the command matching your hardware setup:</p>
+        <ul>
+            <li><strong>For NVIDIA GPUs (CUDA 11.8 - Recommended):</strong>
+                <pre><code>pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118</code></pre>
+            </li>
+            <li><strong>For Apple Silicon MacBooks (MPS - M1/M2/M3):</strong>
+                <pre><code>pip install torch torchvision</code></pre>
+            </li>
+            <li><strong>For CPU-only:</strong>
+                <pre><code>pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu</code></pre>
+            </li>
+        </ul>
+
+        <h3>Step 3: Install dependencies and Ninja</h3>
+        <p>Install the python libraries listed in <code>requirements.txt</code>:</p>
+        <pre><code>pip install --upgrade pip
+pip install -r requirements.txt</code></pre>
+
+        <div class="alert-box alert-note">
+            <div class="alert-title">Ninja Compiler</div>
+            <div class="alert-content">
+                The <code>ninja</code> compiler is required to build optimized CUDA kernels. Install it using:<br>
+                &bull; Conda: <code>conda install -c conda-forge ninja -y</code><br>
+                &bull; Pip: <code>pip install ninja</code><br>
+                For CPU or macOS (MPS) environments, if custom CUDA operators fail to compile, the code falls back to CPU implementations automatically.
+            </div>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section III -->
+    <div class="section-container">
+        <h1>III. Running the Streamlit Web UI</h1>
+        <p>The repository provides an interactive Streamlit Web UI (<code>streamlit_app.py</code>) allowing users to upload damaged portrait images, draw masks, and run multi-stage restoration.</p>
+        
+        <h3>1. Launch the Streamlit application</h3>
+        <p>Run the following command from the root workspace directory with the virtual environment activated:</p>
+        <pre><code>streamlit run streamlit_app.py --server.port 8501 --server.address 127.0.0.1</code></pre>
+        <p>Once running, open your web browser and navigate to: <a href="http://127.0.0.1:8501" target="_blank">http://127.0.0.1:8501</a></p>
+
+        <h3>2. Backend & Device Configuration (Advanced Controls)</h3>
+        <p>Expand <strong>Advanced Controls</strong> in the left sidebar to configure inference settings:</p>
+        <ul>
+            <li><strong>Option A: Local Backend (Running models on your machine)</strong>
+                <ul>
+                    <li>Best for personal computers with NVIDIA GPUs or Apple Silicon Macbooks.</li>
+                    <li>Download the trained model checkpoints (.pkl) and place them in the <code>checkpoints/</code> folder:
+                        <ul>
+                            <li>Stage 1 Coarse: <code>resume_phase1_from_finetune_plus_loss.pkl</code></li>
+                            <li>Final Output (Phase 3): <code>network-snapshot-000072.pkl</code></li>
+                            <li>Original MAT (Baseline): <code>Places_512_FullData.pkl</code></li>
+                        </ul>
+                    </li>
+                    <li>Configure on UI:
+                        <ul>
+                            <li>Set <code>Backend Mode</code> to <code>local</code>.</li>
+                            <li>Set <code>Device</code> to <code>cuda</code> (NVIDIA GPU), <code>mps</code> (Apple Silicon MacBook), or <code>cpu</code>.</li>
+                            <li>For <strong>MacBook (Apple Silicon M1/M2/M3)</strong>, enter the text <code>"mps"</code> in the device input field to enable GPU acceleration.</li>
+                            <li>Enter the relative file paths of the checkpoints in their input fields.</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li><strong>Option B: Remote Backend (Running models on a remote GPU server or Colab)</strong>
+                <ul>
+                    <li>Useful for lightweight laptops (e.g. standard MacBooks) to offload heavy neural computations to a GPU server over the network.</li>
+                    <li>On the remote GPU server, start the FastAPI API server:
+                        <pre><code>uvicorn colab_inference_api:app --host 0.0.0.0 --port 8000</code></pre>
+                    </li>
+                    <li>On your local laptop (Client UI):
+                        <ul>
+                            <li>Set <code>Backend Mode</code> to <code>remote</code>.</li>
+                            <li>Set <code>Remote endpoint</code> to the server API URL (e.g., <code>http://&lt;server-ip&gt;:8000</code> or a public ngrok tunnel address generated by Google Colab).</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>3. Streamlit UI Restoration Workflow</h3>
+        <p>The web UI is divided into step-by-step stages mapping directly to the MAT restoration pipeline:</p>
+        <ol>
+            <li><strong>Input & Mask:</strong> Upload a damaged portrait image. Paint a mask over the cracks and damages using the freehand **Drawable Canvas**, or select position-based presets (Center, Left, Right, etc.) and click "Generate Mask". Use direction adjustment buttons (←, →, ↑, ↓) to nudge the mask position to cover the damage.</li>
+            <li><strong>Masked Input:</strong> Preview the input package showing the original image overlayed with a dark mask. Click "Confirm Input Package" to lock configuration.</li>
+            <li><strong>Stage 1 (Coarse Restoration):</strong> Uses the model trained in Phase 1 (Base Finetuning + Reconstruction Loss) to restore a coarse layout, filling in large structure holes.</li>
+            <li><strong>Final Output (Refinement Stage):</strong> Uses the model trained in Phase 2 & 3 (incorporating Transformer Adapters, Structure Guidance, and Adaptive Gate) to restore fine details (eyes, nose, mouth lines, and brushstroke textures).</li>
+            <li><strong>Compare View & Lightbox:</strong> Select the <strong>Compare</strong> tab to compare the original image side-by-side with the Stage 1 coarse output, Final Output, and original MAT Baseline model. Toggle <strong>Lightbox</strong> mode to zoom (mouse scroll) and pan (drag and drop) to inspect fine brushstroke transitions.</li>
+        </ol>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section IV -->
+    <div class="section-container">
+        <h1>IV. Command-Line Interface (CLI) Batch Inference</h1>
+        <p>To perform batch inference on a directory of images without loading the graphical interface, run the <code>generate_image.py</code> script:</p>
+        <pre><code>python generate_image.py \
+    --network checkpoints/network-snapshot-000072.pkl \
+    --dpath test_sets/CelebA-HQ/images \
+    --mpath test_sets/CelebA-HQ/masks \
+    --outdir samples_output</code></pre>
+
+        <p><strong>Parameter Reference:</strong></p>
+        <ul>
+            <li><code>--network</code>: File path to the trained checkpoint snapshot (.pkl).</li>
+            <li><code>--dpath</code>: Directory containing the input damaged portrait images.</li>
+            <li><code>--mpath</code>: (Optional) Directory containing binary black-and-white mask images (0/black for valid context, 1/white for corrupted holes to restore). If omitted, random masks will be generated automatically.</li>
+            <li><code>--outdir</code>: Directory path where restored portrait images will be saved.</li>
+        </ul>
+
+        <div class="alert-box alert-important">
+            <div class="alert-title">Image Dimensions Constraint</div>
+            <div class="alert-content">
+                The MAT model requires image width and height to be multiples of 512 (e.g., 512x512, 1024x1024). For arbitrary dimensions, resize or pad the image to a multiple of 512 before running the script. The Streamlit Web UI handles this padding automatically.
+            </div>
+        </div>
+    </div>
+
+    <!-- Section V -->
+    <div class="section-container">
+        <h1>V. Model Retraining Workflow</h1>
+        <p>The retraining process of the artwork restoration model is divided into three consecutive training stages:</p>
+
+        <h3>1. Dataset Preparation</h3>
+        <p>Compress the training dataset into an uncompressed ZIP format to maximize GPU disk read throughput (I/O) during training:</p>
+        <pre><code>python dataset_tool.py --source /path/to/raw/images --dest datasets/faceart_train.zip --width 512 --height 512</code></pre>
+        <p>Prepare both datasets:</p>
+        <ul>
+            <li>Training Set: <code>datasets/faceart_train.zip</code></li>
+            <li>Validation Set: <code>datasets/faceart_val.zip</code></li>
+        </ul>
+
+        <h3>2. Three-Phase Training Flow</h3>
+
+        <h4>⚡ Phase 1: Base Finetuning</h4>
+        <ul>
+            <li><strong>Objective:</strong> Finetune the base MAT network on the custom portrait artwork dataset (FaceArt), enabling Relative Position Bias (to model brushstroke spatial relationships), Mask-Aware Additive Bias (to suppress halo artifacts), and Deterministic Latent Gate (to stabilize style mixing).</li>
+            <li><strong>Automation scripts on server:</strong> <code>collab/run_phase1_server_from_drive.sh</code></li>
+            <li><strong>Prepare data and baseline checkpoint:</strong>
+                <pre><code>bash collab/run_phase1_server_from_drive.sh prepare</code></pre>
+            </li>
+            <li><strong>Dry-run:</strong>
+                <pre><code>bash collab/run_phase1_server_from_drive.sh dry-run</code></pre>
+            </li>
+            <li><strong>Start training (running in tmux):</strong>
+                <pre><code>tmux new -d -s phase1_job "bash collab/run_phase1_server_from_drive.sh train"</code></pre>
+            </li>
+        </ul>
+
+        <div class="page-break"></div>
+
+        <p><strong>Core training command:</strong></p>
+        <pre><code>python train.py \
+    --outdir=runs/faceart_phase1_relbias_gate \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=checkpoints/Places_512_FullData.pkl \
+    --epochs=40 \
+    --batch=4 \
+    --workers=2 \
+    --snap=5 \
+    --metrics=none \
+    --pr=0.1 \
+    --pl=False \
+    --truncation=0.5 \
+    --style_mix=0.5 \
+    --ema=10 \
+    --lr=5e-5 \
+    --lrt=1e-4 \
+    --lambda-ffl=0.02 \
+    --aug=noaug \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True</code></pre>
+
+        <h4>⚡ Phase 2: Transformer Adapter Training</h4>
+        <ul>
+            <li><strong>Objective:</strong> Freeze the core parameters of MAT learned in Phase 1 and insert lightweight adaptable blocks (Transformer Adapters at resolutions of 32x32 and 16x16) between attention layers. This enables the model to adapt to portrait artwork style details without destroying its general restoration knowledge.</li>
+            <li><strong>Core training command:</strong>
+                <pre><code>python train.py \
+    --outdir=runs/faceart_phase2_tran_adapter \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=runs/faceart_phase1_relbias_gate/00000-places512/network-snapshot-000040.pkl \
+    --epochs=30 \
+    --batch=4 \
+    --workers=2 \
+    --snap=5 \
+    --metrics=none \
+    --pr=0.1 \
+    --pl=False \
+    --truncation=0.5 \
+    --style_mix=0.5 \
+    --ema=10 \
+    --lr=2.5e-5 \
+    --lrt=1e-4 \
+    --lambda-ffl=0.02 \
+    --aug=noaug \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True \
+    --enable-tran-adapter-32=True \
+    --enable-tran-adapter-16=True</code></pre>
+            </li>
+        </ul>
+
+        <h4>⚡ Phase 3: Structure Guidance & Adaptive Gate</h4>
+        <ul>
+            <li><strong>Objective:</strong> Activate the portrait structure guidance network (Structure Guidance) to restore large missing components, and train the adaptive gate module (Adaptive Gate) to merge global facial structure details with local adapter textures.</li>
+            <li><strong>Automation scripts on server:</strong> <code>collab/run_phase3_server_from_phase2.sh</code></li>
+            <li><strong>Prepare data and Phase 2 checkpoint:</strong>
+                <pre><code>bash collab/run_phase3_server_from_phase2.sh prepare</code></pre>
+            </li>
+            <li><strong>Dry-run:</strong>
+                <pre><code>bash collab/run_phase3_server_from_phase2.sh dry-run</code></pre>
+            </li>
+            <li><strong>Start training (running in tmux):</strong>
+                <pre><code>tmux new -d -s phase3_job "bash collab/run_phase3_server_from_phase2.sh train"</code></pre>
+            </li>
+        </ul>
+
+        <div class="page-break"></div>
+
+        <p><strong>Core training command:</strong></p>
+        <pre><code>python train.py \
+    --outdir=runs/faceart_phase3_adaptive_structure_guidance \
+    --data=datasets/faceart_train.zip \
+    --data_val=datasets/faceart_val.zip \
+    --cfg=places512 \
+    --resume=runs/faceart_phase2_tran_adapter/00000-places512/network-snapshot-000030.pkl \
+    --epochs=10 \
+    --batch=4 \
+    --workers=2 \
+    --snap=2 \
+    --metrics=none \
+    --pr=0.1 \
+    --pl=False \
+    --truncation=0.5 \
+    --style_mix=0.5 \
+    --ema=10 \
+    --lr=5e-5 \
+    --lrt=1e-4 \
+    --lambda-ffl=0.02 \
+    --aug=noaug \
+    --enable-rel-pos-bias=True \
+    --enable-mask-bias=True \
+    --enable-deterministic-latent-gate=True \
+    --enable-tran-adapter-32=True \
+    --enable-tran-adapter-16=True \
+    --enable-structure-guidance=True \
+    --enable-structure-fuse-16=True \
+    --enable-structure-fuse-stage2=True \
+    --enable-structure-fuse-32=False \
+    --enable-adaptive-structure-gate=True</code></pre>
+
+        <h3>3. Training Monitoring</h3>
+        <p>To monitor training loss values and check progress:</p>
+        <ul>
+            <li>Read the execution logs in your current training directory:
+                <pre><code>tail -f runs/faceart_phase3_adaptive_structure_guidance/00000-places512/log.txt</code></pre>
+            </li>
+            <li>Or view server launch log:
+                <pre><code>tail -f runs/faceart_phase3_adaptive_structure_guidance/server-launch.log</code></pre>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Section VI -->
+    <div class="section-container">
+        <h1>VI. Model Evaluation Metrics</h1>
+        <p>The evaluation scripts are stored in the <code>evaluation/</code> directory, allowing you to calculate quantitative image quality metrics:</p>
+        
+        <ol>
+            <li><strong>PSNR, SSIM, and L1 Loss:</strong>
+                <pre><code>python evaluation/eval_psnr_ssim.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images</code></pre>
+            </li>
+            <li><strong>LPIPS (Human Perceptual Quality Metric):</strong>
+                <pre><code>python evaluation/eval_lpips.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images</code></pre>
+            </li>
+            <li><strong>FID (Fréchet Inception Distance for image realism):</strong>
+                <pre><code>python evaluation/eval_fid.py --rec_path /path/to/reconstructed/images --gt_path /path/to/ground_truth/images</code></pre>
+            </li>
+        </ol>
+        <p>These statistics are summarized to report quantitative results for the graduation thesis.</p>
+    </div>
+
+</body>
+</html>
