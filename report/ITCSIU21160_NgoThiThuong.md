@@ -10,7 +10,6 @@ Full name: Ngo Thi Thuong
 Student ID: ITCSIU21160
 
 THESIS TITLE: A Deep Learning Approach for Artwork Reconstruction
-(An extended framework based on Mask-Aware Transformer - MAT)
 
 GitHub Link: thuongngo050902/THESIS
 
