@@ -258,7 +258,21 @@
         <h2>1. Introduction</h2>
         <p>This system restores damaged portrait artwork (scratches, cracks, missing structural details) using our proposed deep learning model based on the Mask-Aware Transformer (MAT) architecture. Unlike general-purpose image restoration methods, this model is specifically optimized for artistic portrait faces using Relative Position Bias, Transformer Adapters, and Structure Guidance to preserve brushstrokes and facial geometric alignment.</p>
 
-        <h2>2. Directory Structure</h2>
+        <h2>2. Key Features</h2>
+        <ul>
+            <li><strong>Multi-Step Pipeline:</strong> Progress seamlessly through <code>Input & Mask</code> &rarr; <code>Masked Input</code> &rarr; <code>Stage 1 (Coarse/Finetune)</code> &rarr; <code>Final Output (Refined/Adapter)</code>.</li>
+            <li><strong>Interactive Canvas & Tools:</strong> Freehand mask painting using <code>streamlit-drawable-canvas</code> along with direct geometric presets (Cross, Rect, Scribble).</li>
+            <li><strong>Mask Nudge Adjustments:</strong> Easily move, scale, and shift the mask alignment via direction buttons (&larr; Left, &rarr; Right, &uarr; Up, &darr; Down) to center on facial damage.</li>
+            <li><strong>Dual Backend Modes:</strong>
+                <ul>
+                    <li><strong>Local:</strong> Runs inference directly on the client machine (supports cuda, cpu, or mps for Apple Silicon).</li>
+                    <li><strong>Remote:</strong> Offloads computational workloads to a remote GPU server or Google Colab instance via a FastAPI backend API (colab_inference_api.py).</li>
+                </ul>
+            </li>
+            <li><strong>Visual Comparator & Lightbox:</strong> Side-by-side comparative views of the Original, Stage 1, Stage 2 (Final), and original MAT Baseline outputs. Includes a zoom/pan Lightbox mode for inspecting brush strokes.</li>
+        </ul>
+
+        <h2>3. Directory Structure</h2>
         <p>Below is the core structure of the repository outlining the function of key folders and scripts:</p>
         <ul>
             <li><code>checkpoints/</code> — Directory storing trained model weights (.pkl files). Download these checkpoint files from the <a href="https://drive.google.com/drive/folders/1QHMsH1fHhLzqHFy9BsJQcNuBVLVMbxIp?usp=drive_link" target="_blank">Checkpoints Google Drive Folder</a>.</li>
@@ -338,11 +352,15 @@
             </li>
         </ul>
 
-        <h2>2. Virtual Environment Setup</h2>
+        <h2>2. Clone the Repository</h2>
+        <pre><code>git clone https://github.com/thuongngo050902/THESIS.git
+cd THESIS</code></pre>
+
+        <h2>3. Environment Setup (Recommended: Conda)</h2>
         <p>We recommend using Conda or Miniconda to manage Python packages and prevent C++ library compiler conflicts:</p>
         
-        <h3>Step 1: Create a Python 3.8 virtual environment</h3>
-        <pre><code>conda create -n faceart_env python=3.8 -y
+        <pre><code># Create environment with Python 3.8
+conda create -n faceart_env python=3.8 -y
 conda activate faceart_env</code></pre>
         
         <p><strong>Alternative (Using traditional Python venv):</strong></p>
@@ -357,32 +375,31 @@ source .venv/bin/activate</code></pre>
             </li>
         </ul>
 
-        <h3>Step 2: Install PyTorch</h3>
-        <p>Choose the command matching your hardware setup:</p>
+        <h2>4. Install PyTorch</h2>
+        <p>Select the command corresponding to your target hardware:</p>
         <ul>
-            <li><strong>For NVIDIA GPUs (CUDA 11.8 - Recommended):</strong>
+            <li><strong>NVIDIA GPU (CUDA 11.8 - Recommended):</strong>
                 <pre><code>pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118</code></pre>
             </li>
-            <li><strong>For Apple Silicon MacBooks (MPS - M1/M2/M3):</strong>
+            <li><strong>Apple Silicon Macbook (MPS - M1/M2/M3):</strong>
                 <pre><code>pip install torch torchvision</code></pre>
             </li>
-            <li><strong>For CPU-only:</strong>
+            <li><strong>CPU-Only:</strong>
                 <pre><code>pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu</code></pre>
             </li>
         </ul>
 
-        <h3>Step 3: Install dependencies and Ninja</h3>
-        <p>Install the python libraries listed in <code>requirements.txt</code>:</p>
+        <h2>5. Install Dependencies & Ninja</h2>
         <pre><code>pip install --upgrade pip
 pip install -r requirements.txt</code></pre>
 
         <div class="alert-box alert-note">
             <div class="alert-title">Ninja Compiler</div>
             <div class="alert-content">
-                The <code>ninja</code> compiler is required to build optimized CUDA kernels. Install it using:<br>
+                The <code>ninja</code> compiler is required for building high-performance CUDA kernels during training.<br>
                 &bull; Conda: <code>conda install -c conda-forge ninja -y</code><br>
                 &bull; Pip: <code>pip install ninja</code><br>
-                For CPU or macOS (MPS) environments, if custom CUDA operators fail to compile, the code falls back to CPU implementations automatically.
+                If running on CPU-only or macOS (MPS), if compilation fails, the code defaults automatically to CPU fallbacks.
             </div>
         </div>
     </div>
@@ -494,23 +511,7 @@ pip install -r requirements.txt</code></pre>
         <h3>2. Three-Phase Training Flow</h3>
 
         <h4>⚡ Phase 1: Base Finetuning</h4>
-        <ul>
-            <li><strong>Objective:</strong> Finetune the base MAT network on the custom portrait artwork dataset (FaceArt), enabling Relative Position Bias (to model brushstroke spatial relationships), Mask-Aware Additive Bias (to suppress halo artifacts), and Deterministic Latent Gate (to stabilize style mixing).</li>
-            <li><strong>Automation scripts on server:</strong> <code>collab/run_phase1_server_from_drive.sh</code></li>
-            <li><strong>Prepare data and baseline checkpoint:</strong>
-                <pre><code>bash collab/run_phase1_server_from_drive.sh prepare</code></pre>
-            </li>
-            <li><strong>Dry-run:</strong>
-                <pre><code>bash collab/run_phase1_server_from_drive.sh dry-run</code></pre>
-            </li>
-            <li><strong>Start training (running in tmux):</strong>
-                <pre><code>tmux new -d -s phase1_job "bash collab/run_phase1_server_from_drive.sh train"</code></pre>
-            </li>
-        </ul>
-
-        <div class="page-break"></div>
-
-        <p><strong>Core training command:</strong></p>
+        <p>Finetunes the base MAT network on the custom portrait artwork dataset using relative biases and deterministic gate configurations.</p>
         <pre><code>python train.py \
     --outdir=runs/faceart_phase1_relbias_gate \
     --data=datasets/faceart_train.zip \
@@ -519,27 +520,14 @@ pip install -r requirements.txt</code></pre>
     --resume=checkpoints/Places_512_FullData.pkl \
     --epochs=40 \
     --batch=4 \
-    --workers=2 \
-    --snap=5 \
-    --metrics=none \
-    --pr=0.1 \
-    --pl=False \
-    --truncation=0.5 \
-    --style_mix=0.5 \
-    --ema=10 \
     --lr=5e-5 \
-    --lrt=1e-4 \
-    --lambda-ffl=0.02 \
-    --aug=noaug \
     --enable-rel-pos-bias=True \
     --enable-mask-bias=True \
     --enable-deterministic-latent-gate=True</code></pre>
 
         <h4>⚡ Phase 2: Transformer Adapter Training</h4>
-        <ul>
-            <li><strong>Objective:</strong> Freeze the core parameters of MAT learned in Phase 1 and insert lightweight adaptable blocks (Transformer Adapters at resolutions of 32x32 and 16x16) between attention layers. This enables the model to adapt to portrait artwork style details without destroying its general restoration knowledge.</li>
-            <li><strong>Core training command:</strong>
-                <pre><code>python train.py \
+        <p>Freezes core network parameters and trains lightweight adapter layers at 32x32 and 16x16 scales.</p>
+        <pre><code>python train.py \
     --outdir=runs/faceart_phase2_tran_adapter \
     --data=datasets/faceart_train.zip \
     --data_val=datasets/faceart_val.zip \
@@ -547,44 +535,15 @@ pip install -r requirements.txt</code></pre>
     --resume=runs/faceart_phase1_relbias_gate/00000-places512/network-snapshot-000040.pkl \
     --epochs=30 \
     --batch=4 \
-    --workers=2 \
-    --snap=5 \
-    --metrics=none \
-    --pr=0.1 \
-    --pl=False \
-    --truncation=0.5 \
-    --style_mix=0.5 \
-    --ema=10 \
     --lr=2.5e-5 \
-    --lrt=1e-4 \
-    --lambda-ffl=0.02 \
-    --aug=noaug \
     --enable-rel-pos-bias=True \
     --enable-mask-bias=True \
     --enable-deterministic-latent-gate=True \
     --enable-tran-adapter-32=True \
     --enable-tran-adapter-16=True</code></pre>
-            </li>
-        </ul>
 
-        <h4>⚡ Phase 3: Structure Guidance & Adaptive Gate</h4>
-        <ul>
-            <li><strong>Objective:</strong> Activate the portrait structure guidance network (Structure Guidance) to restore large missing components, and train the adaptive gate module (Adaptive Gate) to merge global facial structure details with local adapter textures.</li>
-            <li><strong>Automation scripts on server:</strong> <code>collab/run_phase3_server_from_phase2.sh</code></li>
-            <li><strong>Prepare data and Phase 2 checkpoint:</strong>
-                <pre><code>bash collab/run_phase3_server_from_phase2.sh prepare</code></pre>
-            </li>
-            <li><strong>Dry-run:</strong>
-                <pre><code>bash collab/run_phase3_server_from_phase2.sh dry-run</code></pre>
-            </li>
-            <li><strong>Start training (running in tmux):</strong>
-                <pre><code>tmux new -d -s phase3_job "bash collab/run_phase3_server_from_phase2.sh train"</code></pre>
-            </li>
-        </ul>
-
-        <div class="page-break"></div>
-
-        <p><strong>Core training command:</strong></p>
+        <h4>⚡ Phase 3: Structure Guidance & Adaptive Gate Training</h4>
+        <p>Enables geometry-guided structures and the adaptive gate module to compile the final outputs.</p>
         <pre><code>python train.py \
     --outdir=runs/faceart_phase3_adaptive_structure_guidance \
     --data=datasets/faceart_train.zip \
@@ -593,18 +552,7 @@ pip install -r requirements.txt</code></pre>
     --resume=runs/faceart_phase2_tran_adapter/00000-places512/network-snapshot-000030.pkl \
     --epochs=10 \
     --batch=4 \
-    --workers=2 \
-    --snap=2 \
-    --metrics=none \
-    --pr=0.1 \
-    --pl=False \
-    --truncation=0.5 \
-    --style_mix=0.5 \
-    --ema=10 \
     --lr=5e-5 \
-    --lrt=1e-4 \
-    --lambda-ffl=0.02 \
-    --aug=noaug \
     --enable-rel-pos-bias=True \
     --enable-mask-bias=True \
     --enable-deterministic-latent-gate=True \
@@ -613,7 +561,6 @@ pip install -r requirements.txt</code></pre>
     --enable-structure-guidance=True \
     --enable-structure-fuse-16=True \
     --enable-structure-fuse-stage2=True \
-    --enable-structure-fuse-32=False \
     --enable-adaptive-structure-gate=True</code></pre>
 
         <h3>3. Training Monitoring</h3>
