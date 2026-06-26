@@ -1,4 +1,5 @@
-# Portrait Artwork Restoration (FaceArt Restoration) using Mask-Aware Transformer (MAT)
+# A Deep Learning Approach for Artwork Reconstruction
+## (An extended framework based on Mask-Aware Transformer - MAT)
 
 [![Python 3.8](https://img.shields.io/badge/Python-3.8-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-%3E%3D%201.7.1-red.svg)](https://pytorch.org/)
@@ -6,12 +7,13 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40.0%2B-ff4b4b.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-Research--Only-orange.svg)](LICENSE)
 
-This repository contains the official implementation of the graduation thesis project: **Portrait Artwork Restoration (FaceArt Restoration) using Mask-Aware Transformer (MAT)**.
+This repository contains the official implementation of the graduation thesis project: **A Deep Learning Approach for Artwork Reconstruction** (an extended framework based on Mask-Aware Transformer - MAT).
 
-* **Author:** Ngô Thị Thương (Student ID: **ITCSIU21160**)
-* **Advisor:** TS. Lê Thị Ngọc Hạnh
+* **Author:** Ngo Thi Thuong (Student ID: **ITCSIU21160**)
+* **Advisor:** Le Thi Ngoc Hanh, Ph.D
 * **Affiliation:** School of Computer Science and Engineering, International University - VNU-HCM
 * **Department:** Computer Science
+
 
 ---
 
@@ -34,7 +36,7 @@ The architecture optimizes the standard MAT model using a **Three-Phase Training
 
 The project features a premium Web UI powered by **Streamlit** for interactive, step-by-step restoration.
 
-![Streamlit UI Architecture](figures/teasing.png)
+![Streamlit UI Architecture](figures/fig4_4_stagewise_results.png)
 
 ### Key Features
 * **Multi-Step Pipeline:** Progress seamlessly through `Input & Mask` $\to$ `Masked Input` $\to$ `Stage 1 (Coarse/Finetune)` $\to$ `Final Output (Refined/Adapter)`.
